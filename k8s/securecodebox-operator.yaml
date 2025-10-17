@@ -1,0 +1,52 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: securecodebox-operator
+  namespace: security-tools
+  labels:
+    app: securecodebox-operator
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: securecodebox-operator
+  template:
+    metadata:
+      labels:
+        app: securecodebox-operator
+    spec:
+      serviceAccountName: securecodebox-operator
+      containers:
+      - name: operator
+        image: securecodebox/operator:latest
+        imagePullPolicy: Always
+        env:
+        - name: NAMESPACE
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.namespace
+        - name: POD_NAME
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.name
+        resources:
+          limits:
+            cpu: 1000m
+            memory: 1Gi
+          requests:
+            cpu: 500m
+            memory: 512Mi
+        livenessProbe:
+          httpGet:
+            path: /healthz
+            port: 8080
+          initialDelaySeconds: 15
+          periodSeconds: 20
+        readinessProbe:
+          httpGet:
+            path: /readyz
+            port: 8080
+          initialDelaySeconds: 5
+          periodSeconds: 10
+      restartPolicy: Always
+
