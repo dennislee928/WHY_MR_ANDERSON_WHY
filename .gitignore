@@ -109,3 +109,4 @@ secrets/
 *.pid.lock
 .cache/
 
+/personal-publicdata
