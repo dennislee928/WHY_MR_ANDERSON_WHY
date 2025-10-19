@@ -1,0 +1,227 @@
+name: "dennis-security-infra-toolkit"
+services:
+  # Database - shared by tools that need persistence
+  postgres:
+    image: postgres:15-alpine
+    environment:
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-SECURE_PASSWORD_REQUIRED}
+      POSTGRES_USER: sectools
+      POSTGRES_DB: sectools
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./init-scripts:/docker-entrypoint-initdb.d:ro
+    networks:
+      - security_net
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U sectools"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    deploy:
+      resources:
+        limits:
+          cpus: '2'
+          memory: 2G
+        reservations:
+          cpus: '0.5'
+          memory: 512M
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  # Vault - secrets management
+  vault:
+    image: vault:1.13.3
+    cap_add:
+      - IPC_LOCK
+    environment:
+      VAULT_DEV_ROOT_TOKEN_ID: ${VAULT_TOKEN:-SECURE_TOKEN_REQUIRED}
+      VAULT_DEV_LISTEN_ADDRESS: 0.0.0.0:8200
+    ports:
+      - "8200:8200"
+    volumes:
+      - vault_data:/vault/data
+      - vault_logs:/vault/logs
+    networks:
+      - security_net
+
+  # Nuclei Parser (Kubernetes service - enabled for K8s integration)
+  parser-nuclei:
+    image: securecodebox/parser-nuclei:latest
+    environment:
+      DATABASE_URL: postgres://sectools:${DB_PASSWORD:-SECURE_PASSWORD_REQUIRED}@postgres:5432/sectools
+    depends_on:
+      postgres:
+        condition: service_healthy
+    volumes:
+      - scan_results:/results
+    networks:
+      - security_net
+    profiles:
+      - k8s-integration
+
+  # AMASS Parser (Kubernetes service - enabled for K8s integration)
+  parser-amass:
+    image: securecodebox/parser-amass:latest
+    environment:
+      DATABASE_URL: postgres://sectools:${DB_PASSWORD:-SECURE_PASSWORD_REQUIRED}@postgres:5432/sectools
+    depends_on:
+      postgres:
+        condition: service_healthy
+    volumes:
+      - scan_results:/results
+    networks:
+      - security_net
+    profiles:
+      - k8s-integration
+
+  # SecureCodeBox Operator (Kubernetes service - enabled for K8s integration)
+  operator:
+    image: securecodebox/operator:latest
+    environment:
+      NAMESPACE: default
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - operator_config:/config
+    networks:
+      - security_net
+    profiles:
+      - k8s-integration
+
+  # Nuclei Scanner (run-once service - use docker-compose run)
+  scanner-nuclei:
+    image: projectdiscovery/nuclei:latest
+    volumes:
+      - scan_results:/results
+      - nuclei_templates:/root/.config/nuclei
+    environment:
+      SCAN_OUTPUT_DIR: /results
+    networks:
+      - security_net
+    profiles:
+      - scanner
+
+  # Nmap Scanner (run-once service - use docker-compose run)
+  nmap:
+    image: broadinstitute/nmap:latest
+    volumes:
+      - scan_results:/results
+    networks:
+      - security_net
+    profiles:
+      - scanner
+
+  # Traefik - reverse proxy/load balancer
+  traefik:
+    image: traefik:latest
+    command:
+      - "--api.insecure=true"
+      - "--providers.docker=true"
+      - "--entrypoints.web.address=:80"
+      - "--entrypoints.websecure.address=:443"
+    ports:
+      - "8888:80"    # HTTP (changed from 80 to avoid conflict)
+      - "8443:443"   # HTTPS (changed from 443)
+      - "8090:8080"  # Dashboard (changed from 8080 to avoid conflict)
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - traefik_config:/etc/traefik
+    networks:
+      - security_net
+
+  # ArgoCD - GitOps (Kubernetes service - enabled for K8s integration)
+  argocd:
+    image: argoproj/argocd:v2.6.15
+    environment:
+      ARGOCD_SERVER_INSECURE: "true"
+    ports:
+      - "8081:8080"
+    volumes:
+      - argocd_data:/var/lib/argocd
+    networks:
+      - security_net
+    profiles:
+      - k8s-integration
+
+  # CovenantSQL - distributed database (requires config.yaml - disabled for standalone use)
+  # covenantsql:
+  #   image: covenantsql/covenantsql:latest
+  #   volumes:
+  #     - covenantsql_data:/data
+  #   networks:
+  #     - security_net
+
+  # AMASS Scanner (run-once service - use docker-compose run)
+  scanner-amass:
+    image: caffix/amass:latest
+    volumes:
+      - scan_results:/results
+    networks:
+      - security_net
+    profiles:
+      - scanner
+
+  # IntelOwl Nuclei Analyzer (run-once service)
+  intelowl-nuclei:
+    image: intelowlproject/intelowl_nuclei_analyzer:v6.4.0
+    volumes:
+      - scan_results:/results
+    networks:
+      - security_net
+    profiles:
+      - scanner
+
+  # Burp Suite Scanner (run-once service)
+  scanner-burpsuite:
+    image: retenet/burpsuite:latest
+    volumes:
+      - scan_results:/results
+    networks:
+      - security_net
+    profiles:
+      - scanner
+
+  # Web UI/Dashboard (example with httpx)
+  httpx-server:
+    image: acuvity/mcp-server-httpx:latest
+    ports:
+      - "8082:8080"
+    environment:
+      DB_HOST: postgres
+      DB_USER: sectools
+      DB_PASSWORD: ${DB_PASSWORD:-SECURE_PASSWORD_REQUIRED}
+      DB_NAME: sectools
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - security_net
+
+volumes:
+  postgres_data:
+    driver: local
+  vault_data:
+    driver: local
+  vault_logs:
+    driver: local
+  scan_results:
+    driver: local
+  nuclei_templates:
+    driver: local
+  operator_config:
+    driver: local
+  traefik_config:
+    driver: local
+  argocd_data:
+    driver: local
+  covenantsql_data:
+    driver: local
+
+networks:
+  security_net:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.28.0.0/16

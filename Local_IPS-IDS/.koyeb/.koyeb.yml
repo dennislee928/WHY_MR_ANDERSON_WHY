@@ -1,0 +1,39 @@
+# Koyeb 簡化配置檔
+# 官方格式：https://www.koyeb.com/docs/build-and-deploy/build-from-git
+
+name: pandora-agent
+
+services:
+  pandora-agent:
+    build:
+      dockerfile: Dockerfile.agent.koyeb
+      context: .
+    
+    regions:
+      - fra
+    
+    instance:
+      type: nano
+    
+    scaling:
+      min: 1
+      max: 2
+    
+    ports:
+      - port: 8080
+        protocol: http
+    
+    routes:
+      - path: /
+        port: 8080
+    
+    health_checks:
+      http:
+        port: 8080
+        path: /health
+    
+    env:
+      LOG_LEVEL: info
+      GIN_MODE: release
+      PORT: "8080"
+

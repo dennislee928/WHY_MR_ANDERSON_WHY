@@ -1,0 +1,31 @@
+# Railway PostgreSQL Configuration
+# 此檔案用於 Railway.app PostgreSQL 服務部署
+
+[build]
+builder = "NIXPACKS"
+
+[deploy]
+numReplicas = 1
+restartPolicyType = "ON_FAILURE"
+restartPolicyMaxRetries = 10
+healthcheckPath = "/"
+healthcheckTimeout = 100
+
+# PostgreSQL 會由 Railway 的 Managed Database 提供
+# 不需要自訂建置，只需要在 Railway Dashboard 中新增 PostgreSQL Plugin
+
+# 部署步驟：
+# 1. 在 Railway Dashboard 建立新專案
+# 2. 點擊 "New" -> "Database" -> "Add PostgreSQL"
+# 3. Railway 會自動提供以下環境變數：
+#    - DATABASE_URL
+#    - PGHOST
+#    - PGPORT
+#    - PGUSER
+#    - PGPASSWORD
+#    - PGDATABASE
+# 4. 複製這些變數到其他服務使用
+
+# 初始化 SQL
+# Railway 支援自動執行 /configs/postgres/init.sql
+

@@ -1,0 +1,36 @@
+# Render 部署配置
+# 用於部署 Redis 和 Nginx 反向代理
+
+services:
+  # Redis - 快取服務
+  - type: redis
+    name: pandora-redis
+    plan: free
+    ipAllowList: []
+    maxmemoryPolicy: allkeys-lru
+    # Render 會自動提供 REDIS_URL 環境變數
+
+  # Nginx - 反向代理
+  - type: web
+    name: pandora-nginx
+    env: docker
+    dockerfilePath: ./Dockerfile.nginx
+    region: oregon
+    plan: free
+    healthCheckPath: /health
+    envVars:
+      - key: AXIOM_UI_URL
+        sync: false
+      - key: GRAFANA_URL
+        sync: false
+      - key: PROMETHEUS_URL
+        sync: false
+      - key: LOKI_URL
+        sync: false
+      - key: ALERTMANAGER_URL
+        sync: false
+    routes:
+      - type: redirect
+        source: /*
+        destination: https://pandora-nginx.onrender.com$1
+

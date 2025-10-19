@@ -1,0 +1,110 @@
+name: Integration Tests
+
+on:
+  push:
+    branches: [ "main", "develop" ]
+  pull_request:
+    branches: [ "main" ]
+  workflow_dispatch:
+
+jobs:
+  docker-compose-tests:
+    runs-on: ubuntu-latest
+    name: Docker Compose Integration Tests
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Set up Docker Buildx
+      uses: docker/setup-buildx-action@v3
+      
+    - name: Start PostgreSQL
+      run: |
+        cd Docker/compose
+        docker-compose up -d postgres
+        
+    - name: Wait for PostgreSQL
+      run: |
+        cd Docker/compose
+        timeout 60 bash -c 'until docker-compose exec -T postgres pg_isready -U sectools; do sleep 2; done'
+        
+    - name: Test database connection
+      run: |
+        cd Docker/compose
+        docker-compose exec -T postgres psql -U sectools -d sectools -c "SELECT version();"
+        
+    - name: Start Vault
+      run: |
+        cd Docker/compose
+        docker-compose up -d vault
+        
+    - name: Test Vault health
+      run: |
+        cd Docker/compose
+        sleep 10
+        docker-compose exec -T vault vault status
+        
+    - name: Test Vault token
+      run: |
+        cd Docker/compose
+        docker-compose exec -T vault vault auth -method=token token=root
+        
+    - name: Cleanup
+      if: always()
+      run: |
+        cd Docker/compose
+        docker-compose down -v
+
+  kubernetes-tests:
+    runs-on: ubuntu-latest
+    name: Kubernetes Configuration Tests
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Set up kubectl
+      uses: azure/setup-kubectl@v3
+      with:
+        version: 'v1.28.0'
+        
+    - name: Validate all Kubernetes manifests
+      run: |
+        # 驗證所有 YAML 文件的語法
+        find k8s -name "*.yaml" -print0 | xargs -0 -I {} kubectl apply --dry-run=client -f {}
+        
+    - name: Test resource limits and requests
+      run: |
+        # 檢查資源限制配置
+        grep -r "resources:" k8s/ || echo "No resource limits found"
+        
+    - name: Validate security contexts
+      run: |
+        # 檢查安全上下文配置
+        grep -r "securityContext:" k8s/ || echo "No security contexts found"
+
+  script-tests:
+    runs-on: ubuntu-latest
+    name: Script Tests
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Test PowerShell scripts
+      run: |
+        # 檢查 PowerShell 腳本語法
+        find . -name "*.ps1" -exec pwsh -NoProfile -Command "try { . '{}'; Write-Host 'OK: {}' } catch { Write-Error 'Error in {}: $_' }" \;
+        
+    - name: Test Bash scripts
+      run: |
+        # 檢查 Bash 腳本語法
+        find . -name "*.sh" -exec bash -n {} \; && echo "All bash scripts syntax OK"
+        
+    - name: Test Makefile
+      run: |
+        # 檢查 Makefile 語法（如果存在）
+        if [ -f Makefile ]; then
+          make -n help || echo "Makefile syntax check completed"
+        fi

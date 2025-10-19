@@ -1,0 +1,226 @@
+# Default values for Pandora Box Console IDS-IPS
+# 預設配置值
+
+# 全局配置
+global:
+  imageRegistry: ""
+  imagePullSecrets: []
+  storageClass: "standard"
+
+# 微服務配置
+deviceService:
+  enabled: true
+  replicaCount: 2
+  image:
+    repository: pandora-box/device-service
+    tag: "2.0.0"
+    pullPolicy: IfNotPresent
+  
+  service:
+    type: ClusterIP
+    grpcPort: 50051
+    httpPort: 8081
+    metricsPort: 9091
+  
+  resources:
+    requests:
+      memory: "64Mi"
+      cpu: "100m"
+    limits:
+      memory: "256Mi"
+      cpu: "500m"
+  
+  autoscaling:
+    enabled: true
+    minReplicas: 2
+    maxReplicas: 10
+    targetCPUUtilizationPercentage: 70
+    targetMemoryUtilizationPercentage: 80
+
+networkService:
+  enabled: true
+  replicaCount: 3
+  image:
+    repository: pandora-box/network-service
+    tag: "2.0.0"
+    pullPolicy: IfNotPresent
+  
+  service:
+    type: ClusterIP
+    grpcPort: 50052
+    httpPort: 8082
+    metricsPort: 9092
+  
+  resources:
+    requests:
+      memory: "128Mi"
+      cpu: "200m"
+    limits:
+      memory: "512Mi"
+      cpu: "1000m"
+  
+  autoscaling:
+    enabled: true
+    minReplicas: 3
+    maxReplicas: 20
+    targetCPUUtilizationPercentage: 70
+
+controlService:
+  enabled: true
+  replicaCount: 2
+  image:
+    repository: pandora-box/control-service
+    tag: "2.0.0"
+    pullPolicy: IfNotPresent
+  
+  service:
+    type: ClusterIP
+    grpcPort: 50053
+    httpPort: 8083
+    metricsPort: 9093
+  
+  resources:
+    requests:
+      memory: "64Mi"
+      cpu: "100m"
+    limits:
+      memory: "256Mi"
+      cpu: "500m"
+  
+  autoscaling:
+    enabled: true
+    minReplicas: 2
+    maxReplicas: 10
+    targetCPUUtilizationPercentage: 70
+
+# PostgreSQL 配置
+postgresql:
+  enabled: true
+  auth:
+    username: pandora
+    password: pandora123
+    database: pandora
+  primary:
+    persistence:
+      enabled: true
+      size: 50Gi
+    resources:
+      requests:
+        memory: "256Mi"
+        cpu: "250m"
+      limits:
+        memory: "1Gi"
+        cpu: "1000m"
+
+# Redis 配置
+redis:
+  enabled: true
+  auth:
+    password: pandora123
+  master:
+    persistence:
+      enabled: true
+      size: 10Gi
+    resources:
+      requests:
+        memory: "128Mi"
+        cpu: "100m"
+      limits:
+        memory: "512Mi"
+        cpu: "500m"
+
+# RabbitMQ 配置
+rabbitmq:
+  enabled: true
+  auth:
+    username: pandora
+    password: pandora123
+  persistence:
+    enabled: true
+    size: 20Gi
+  resources:
+    requests:
+      memory: "256Mi"
+      cpu: "200m"
+    limits:
+      memory: "1Gi"
+      cpu: "1000m"
+  metrics:
+    enabled: true
+    serviceMonitor:
+      enabled: true
+
+# Prometheus 配置
+prometheus:
+  enabled: true
+  server:
+    retention: "30d"
+    persistentVolume:
+      enabled: true
+      size: 100Gi
+    resources:
+      requests:
+        memory: "512Mi"
+        cpu: "500m"
+      limits:
+        memory: "2Gi"
+        cpu: "2000m"
+
+# Grafana 配置
+grafana:
+  enabled: true
+  adminPassword: pandora123
+  persistence:
+    enabled: true
+    size: 10Gi
+  datasources:
+    datasources.yaml:
+      apiVersion: 1
+      datasources:
+      - name: Prometheus
+        type: prometheus
+        url: http://prometheus-server:9090
+        isDefault: true
+      - name: Loki
+        type: loki
+        url: http://loki:3100
+
+# Ingress 配置
+ingress:
+  enabled: true
+  className: "nginx"
+  annotations:
+    cert-manager.io/cluster-issuer: "letsencrypt-prod"
+  hosts:
+    - host: pandora-box.example.com
+      paths:
+        - path: /
+          pathType: Prefix
+          service: device-service
+  tls:
+    - secretName: pandora-box-tls
+      hosts:
+        - pandora-box.example.com
+
+# NetworkPolicy 配置
+networkPolicy:
+  enabled: true
+  policyTypes:
+    - Ingress
+    - Egress
+
+# ServiceMonitor 配置（Prometheus Operator）
+serviceMonitor:
+  enabled: true
+  interval: 30s
+  scrapeTimeout: 10s
+
+# mTLS 配置
+mtls:
+  enabled: true
+  certManager:
+    enabled: true
+    issuerRef:
+      name: pandora-ca-issuer
+      kind: ClusterIssuer
+

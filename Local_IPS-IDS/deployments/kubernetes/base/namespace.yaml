@@ -1,0 +1,7 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: pandora-box
+  labels:
+    name: pandora-box
+    app: pandora-box-ids-ips

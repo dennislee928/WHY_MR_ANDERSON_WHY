@@ -1,0 +1,218 @@
+syntax = "proto3";
+
+package pandora.network;
+
+option go_package = "pandora_box_console_ids_ips/api/proto/network";
+
+import "google/protobuf/timestamp.proto";
+import "google/protobuf/empty.proto";
+
+// NetworkService monitors network traffic and detects anomalies
+// 網路服務：監控網路流量和檢測異常
+service NetworkService {
+  // StartMonitoring starts monitoring network traffic
+  // 開始監控網路流量
+  rpc StartMonitoring(MonitorRequest) returns (MonitorResponse);
+
+  // StopMonitoring stops monitoring network traffic
+  // 停止監控網路流量
+  rpc StopMonitoring(StopRequest) returns (StopResponse);
+
+  // GetStatistics gets network statistics
+  // 獲取網路統計
+  rpc GetStatistics(StatsRequest) returns (StatsResponse);
+
+  // AnalyzeTraffic analyzes network traffic (streaming)
+  // 分析網路流量（串流）
+  rpc AnalyzeTraffic(AnalyzeRequest) returns (stream AnalysisResponse);
+
+  // DetectAnomalies detects network anomalies (streaming)
+  // 檢測網路異常（串流）
+  rpc DetectAnomalies(AnomalyRequest) returns (stream AnomalyResponse);
+
+  // GetFlowInfo gets information about a specific flow
+  // 獲取特定流量的資訊
+  rpc GetFlowInfo(FlowInfoRequest) returns (FlowInfoResponse);
+
+  // GetHealth checks the health of the service
+  // 健康檢查
+  rpc GetHealth(google.protobuf.Empty) returns (HealthResponse);
+}
+
+// MonitorRequest contains parameters for starting monitoring
+message MonitorRequest {
+  string interface_name = 1;  // e.g., "eth0"
+  repeated string filters = 2; // BPF filters
+  bool promiscuous_mode = 3;
+  int32 snapshot_length = 4;  // bytes to capture per packet
+}
+
+message MonitorResponse {
+  bool success = 1;
+  string message = 2;
+  string session_id = 3;
+}
+
+// StopRequest contains parameters for stopping monitoring
+message StopRequest {
+  string session_id = 1;
+}
+
+message StopResponse {
+  bool success = 1;
+  string message = 2;
+  NetworkStatistics final_stats = 3;
+}
+
+// StatsRequest requests network statistics
+message StatsRequest {
+  string session_id = 1;
+  google.protobuf.Timestamp start_time = 2;
+  google.protobuf.Timestamp end_time = 3;
+}
+
+message StatsResponse {
+  NetworkStatistics statistics = 1;
+  repeated FlowStatistics top_flows = 2;
+  repeated ProtocolStatistics protocol_stats = 3;
+}
+
+// AnalyzeRequest contains parameters for traffic analysis
+message AnalyzeRequest {
+  string session_id = 1;
+  repeated string analysis_types = 2; // e.g., ["ddos", "port_scan", "malware"]
+  int32 window_seconds = 3;           // analysis window
+}
+
+message AnalysisResponse {
+  string analysis_type = 1;
+  double confidence = 2;              // 0.0 - 1.0
+  string description = 3;
+  map<string, string> details = 4;
+  google.protobuf.Timestamp timestamp = 5;
+}
+
+// AnomalyRequest contains parameters for anomaly detection
+message AnomalyRequest {
+  string session_id = 1;
+  double threshold = 2;               // anomaly score threshold
+  int32 window_seconds = 3;
+}
+
+message AnomalyResponse {
+  string anomaly_type = 1;
+  double anomaly_score = 2;
+  string source_ip = 3;
+  string dest_ip = 4;
+  int32 source_port = 5;
+  int32 dest_port = 6;
+  string protocol = 7;
+  string description = 8;
+  google.protobuf.Timestamp detected_at = 9;
+}
+
+// FlowInfoRequest requests information about a specific flow
+message FlowInfoRequest {
+  string source_ip = 1;
+  string dest_ip = 2;
+  int32 source_port = 3;
+  int32 dest_port = 4;
+  string protocol = 5;
+}
+
+message FlowInfoResponse {
+  FlowInfo flow = 1;
+  repeated PacketInfo recent_packets = 2;
+}
+
+// HealthResponse contains health information
+message HealthResponse {
+  bool healthy = 1;
+  string status = 2;
+  string version = 3;
+  int64 uptime_seconds = 4;
+  map<string, string> dependencies = 5;
+  NetworkServiceMetrics metrics = 6;
+}
+
+// NetworkStatistics contains overall network statistics
+message NetworkStatistics {
+  int64 total_packets = 1;
+  int64 total_bytes = 2;
+  int64 tcp_packets = 3;
+  int64 udp_packets = 4;
+  int64 icmp_packets = 5;
+  int64 other_packets = 6;
+  int64 dropped_packets = 7;
+  double packets_per_second = 8;
+  double bytes_per_second = 9;
+  google.protobuf.Timestamp start_time = 10;
+  google.protobuf.Timestamp last_update = 11;
+}
+
+// FlowStatistics contains statistics for a specific flow
+message FlowStatistics {
+  string source_ip = 1;
+  string dest_ip = 2;
+  int32 source_port = 3;
+  int32 dest_port = 4;
+  string protocol = 5;
+  int64 packet_count = 6;
+  int64 byte_count = 7;
+  google.protobuf.Timestamp first_seen = 8;
+  google.protobuf.Timestamp last_seen = 9;
+}
+
+// ProtocolStatistics contains statistics per protocol
+message ProtocolStatistics {
+  string protocol = 1;
+  int64 packet_count = 2;
+  int64 byte_count = 3;
+  double percentage = 4;
+}
+
+// FlowInfo contains detailed information about a flow
+message FlowInfo {
+  string flow_id = 1;
+  string source_ip = 2;
+  string dest_ip = 3;
+  int32 source_port = 4;
+  int32 dest_port = 5;
+  string protocol = 6;
+  int64 packet_count = 7;
+  int64 byte_count = 8;
+  repeated string flags = 9;
+  google.protobuf.Timestamp start_time = 10;
+  google.protobuf.Timestamp end_time = 11;
+  FlowState state = 12;
+}
+
+// PacketInfo contains information about a single packet
+message PacketInfo {
+  int64 packet_number = 1;
+  int32 length = 2;
+  string protocol = 3;
+  repeated string flags = 4;
+  google.protobuf.Timestamp timestamp = 5;
+  bytes payload_sample = 6;  // first N bytes of payload
+}
+
+// FlowState represents the state of a flow
+enum FlowState {
+  FLOW_STATE_UNKNOWN = 0;
+  FLOW_STATE_NEW = 1;
+  FLOW_STATE_ESTABLISHED = 2;
+  FLOW_STATE_CLOSING = 3;
+  FLOW_STATE_CLOSED = 4;
+}
+
+// NetworkServiceMetrics contains service-level metrics
+message NetworkServiceMetrics {
+  int64 active_sessions = 1;
+  int64 total_flows = 2;
+  int64 anomalies_detected = 3;
+  int64 attacks_detected = 4;
+  double cpu_usage = 5;
+  double memory_usage_mb = 6;
+}
+

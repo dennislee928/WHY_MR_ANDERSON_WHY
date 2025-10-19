@@ -1,0 +1,40 @@
+- pipeline: "Build On-Premise Installers Simple"
+  on: "PUSH"
+  refs:
+  - "refs/heads/main"
+  - "refs/heads/dev"
+  priority: "HIGH"
+  fail_on_prepare_env_warning: true
+  actions:
+  
+  # ============================================
+  # Stage 1: 準備構建環境（簡化版）
+  # ============================================
+  - action: "Prepare Build Environment"
+    type: "BUILD"
+    docker_image_name: "library/ubuntu"
+    docker_image_tag: "22.04"
+    execute_commands:
+    - "apt-get update && apt-get install -y git"
+    - "export VERSION=$(git describe --tags --abbrev=0 2>/dev/null | sed 's/^v//' || echo '0.1.0')"
+    - "export BUILD_DATE=$(date -u '+%Y-%m-%d_%H:%M:%S')"
+    - "export GIT_COMMIT=$(git rev-parse --short HEAD)"
+    - "echo \"Building version: $VERSION\""
+    - "echo \"Build date: $BUILD_DATE\""
+    - "echo \"Git commit: $GIT_COMMIT\""
+    - "echo \"Environment variables set successfully!\""
+  
+  # ============================================
+  # Stage 2: 測試構建（簡化版）
+  # ============================================
+  - action: "Test Build"
+    type: "BUILD"
+    docker_image_name: "library/golang"
+    docker_image_tag: "1.21"
+    execute_commands:
+    - "export VERSION=$(git describe --tags --abbrev=0 2>/dev/null | sed 's/^v//' || echo '0.1.0')"
+    - "echo \"Testing build with version: $VERSION\""
+    - "go version"
+    - "go mod download"
+    - "echo \"Go modules downloaded successfully\""
+    - "echo \"Test build completed!\""

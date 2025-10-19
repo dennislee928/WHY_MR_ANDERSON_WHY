@@ -1,0 +1,52 @@
+apiVersion: v2
+name: pandora-box
+description: Pandora Box Console IDS-IPS - Microservices Architecture
+type: application
+version: 2.0.0
+appVersion: "2.0.0"
+
+keywords:
+  - ids
+  - ips
+  - security
+  - microservices
+  - intrusion-detection
+
+home: https://github.com/your-org/pandora-box
+sources:
+  - https://github.com/your-org/pandora-box
+
+maintainers:
+  - name: Pandora Security Team
+    email: support@pandora-ids.com
+
+dependencies:
+  - name: postgresql
+    version: "12.x.x"
+    repository: "https://charts.bitnami.com/bitnami"
+    condition: postgresql.enabled
+  
+  - name: redis
+    version: "17.x.x"
+    repository: "https://charts.bitnami.com/bitnami"
+    condition: redis.enabled
+  
+  - name: rabbitmq
+    version: "12.x.x"
+    repository: "https://charts.bitnami.com/bitnami"
+    condition: rabbitmq.enabled
+
+  - name: prometheus
+    version: "23.x.x"
+    repository: "https://prometheus-community.github.io/helm-charts"
+    condition: prometheus.enabled
+
+  - name: grafana
+    version: "7.x.x"
+    repository: "https://grafana.github.io/helm-charts"
+    condition: grafana.enabled
+
+annotations:
+  category: Security
+  licenses: MIT
+

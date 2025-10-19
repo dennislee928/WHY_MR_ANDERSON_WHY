@@ -1,0 +1,139 @@
+{
+  "rabbit_version": "3.12.0",
+  "rabbitmq_version": "3.12.0",
+  "product_name": "RabbitMQ",
+  "product_version": "3.12.0",
+  "users": [
+    {
+      "name": "pandora",
+      "password_hash": "2lm9808hN3D4vQZ8E8cF5m7u9w2x4y6z8A0B2C4D6E8F0G2H4I6J8K0L2M4N6O8P0Q2R4S6T8U0V2W4X6Y8Z0",
+      "hashing_algorithm": "rabbit_password_hashing_sha256",
+      "tags": "administrator"
+    }
+  ],
+  "vhosts": [
+    {
+      "name": "/"
+    }
+  ],
+  "permissions": [
+    {
+      "user": "pandora",
+      "vhost": "/",
+      "configure": ".*",
+      "write": ".*",
+      "read": ".*"
+    }
+  ],
+  "exchanges": [
+    {
+      "name": "pandora.events",
+      "vhost": "/",
+      "type": "topic",
+      "durable": true,
+      "auto_delete": false,
+      "internal": false,
+      "arguments": {}
+    },
+    {
+      "name": "pandora.dlx",
+      "vhost": "/",
+      "type": "fanout",
+      "durable": true,
+      "auto_delete": false,
+      "internal": false,
+      "arguments": {}
+    }
+  ],
+  "queues": [
+    {
+      "name": "threat_events",
+      "vhost": "/",
+      "durable": true,
+      "auto_delete": false,
+      "arguments": {
+        "x-dead-letter-exchange": "pandora.dlx",
+        "x-message-ttl": 3600000
+      }
+    },
+    {
+      "name": "network_events",
+      "vhost": "/",
+      "durable": true,
+      "auto_delete": false,
+      "arguments": {
+        "x-dead-letter-exchange": "pandora.dlx",
+        "x-message-ttl": 3600000
+      }
+    },
+    {
+      "name": "system_events",
+      "vhost": "/",
+      "durable": true,
+      "auto_delete": false,
+      "arguments": {
+        "x-dead-letter-exchange": "pandora.dlx",
+        "x-message-ttl": 3600000
+      }
+    },
+    {
+      "name": "device_events",
+      "vhost": "/",
+      "durable": true,
+      "auto_delete": false,
+      "arguments": {
+        "x-dead-letter-exchange": "pandora.dlx",
+        "x-message-ttl": 3600000
+      }
+    },
+    {
+      "name": "dead_letter_queue",
+      "vhost": "/",
+      "durable": true,
+      "auto_delete": false,
+      "arguments": {}
+    }
+  ],
+  "bindings": [
+    {
+      "source": "pandora.events",
+      "vhost": "/",
+      "destination": "threat_events",
+      "destination_type": "queue",
+      "routing_key": "threat.*",
+      "arguments": {}
+    },
+    {
+      "source": "pandora.events",
+      "vhost": "/",
+      "destination": "network_events",
+      "destination_type": "queue",
+      "routing_key": "network.*",
+      "arguments": {}
+    },
+    {
+      "source": "pandora.events",
+      "vhost": "/",
+      "destination": "system_events",
+      "destination_type": "queue",
+      "routing_key": "system.*",
+      "arguments": {}
+    },
+    {
+      "source": "pandora.events",
+      "vhost": "/",
+      "destination": "device_events",
+      "destination_type": "queue",
+      "routing_key": "device.*",
+      "arguments": {}
+    },
+    {
+      "source": "pandora.dlx",
+      "vhost": "/",
+      "destination": "dead_letter_queue",
+      "destination_type": "queue",
+      "routing_key": "",
+      "arguments": {}
+    }
+  ]
+}

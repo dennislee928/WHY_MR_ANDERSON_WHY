@@ -1,0 +1,66 @@
+# Patr.io 部署配置
+# 用於部署 Axiom UI 伺服器
+
+version: "1"
+
+services:
+  axiom-ui:
+    # 容器配置
+    build:
+      dockerfile: Dockerfile.ui
+      context: .
+    
+    # 資源配置
+    resources:
+      cpu: 500m
+      memory: 512Mi
+      replicas: 1
+    
+    # 端口配置
+    ports:
+      - name: http
+        port: 3001
+        protocol: TCP
+        public: true
+    
+    # 環境變數
+    env:
+      - name: PORT
+        value: "3001"
+      - name: LOG_LEVEL
+        value: info
+      - name: GIN_MODE
+        value: release
+      - name: PROMETHEUS_URL
+        secret: PROMETHEUS_URL
+      - name: GRAFANA_URL
+        secret: GRAFANA_URL
+      - name: LOKI_URL
+        secret: LOKI_URL
+      - name: DATABASE_URL
+        secret: DATABASE_URL
+      - name: REDIS_URL
+        secret: REDIS_URL
+      - name: AGENT_URL
+        secret: AGENT_URL
+      - name: JWT_SECRET
+        secret: JWT_SECRET
+    
+    # 健康檢查
+    healthcheck:
+      type: http
+      path: /api/v1/status
+      port: 3001
+      initial_delay_seconds: 30
+      period_seconds: 30
+      timeout_seconds: 10
+      failure_threshold: 3
+    
+    # 自動擴展 (如果需要)
+    autoscaling:
+      enabled: false
+      min_replicas: 1
+      max_replicas: 3
+      target_cpu_utilization: 80
+      target_memory_utilization: 80
+

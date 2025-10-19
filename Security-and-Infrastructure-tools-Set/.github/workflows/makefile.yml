@@ -1,0 +1,135 @@
+name: Security Tools CI/CD
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+  workflow_dispatch:
+
+jobs:
+  # Docker Compose 服務測試
+  docker-compose-test:
+    runs-on: ubuntu-latest
+    name: Test Docker Compose Services
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Set up Docker Buildx
+      uses: docker/setup-buildx-action@v3
+      
+    - name: Test Docker Compose configuration
+      run: |
+        cd Docker/compose
+        docker-compose config
+        
+    - name: Start services for testing
+      run: |
+        cd Docker/compose
+        docker-compose up -d postgres vault
+        
+    - name: Wait for services to be ready
+      run: |
+        sleep 30
+        docker-compose ps
+        
+    - name: Test service health
+      run: |
+        cd Docker/compose
+        docker-compose exec -T postgres pg_isready -U sectools
+        docker-compose logs vault
+        
+    - name: Cleanup
+      if: always()
+      run: |
+        cd Docker/compose
+        docker-compose down -v
+
+  # Kubernetes 配置驗證
+  k8s-validation:
+    runs-on: ubuntu-latest
+    name: Validate Kubernetes Configurations
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Set up kubectl
+      uses: azure/setup-kubectl@v3
+      with:
+        version: 'v1.28.0'
+        
+    - name: Validate Kubernetes manifests
+      run: |
+        # 驗證命名空間配置
+        kubectl apply --dry-run=client -f k8s/namespaces.yaml
+        
+        # 驗證 ConfigMap 和 Secret
+        kubectl apply --dry-run=client -f k8s/configmap.yaml
+        kubectl apply --dry-run=client -f k8s/secrets.yaml
+        
+        # 驗證 ArgoCD 服務
+        kubectl apply --dry-run=client -f k8s/argocd-service.yaml
+        kubectl apply --dry-run=client -f k8s/argocd-loadbalancer.yaml
+        
+        # 驗證 SecureCodeBox 配置
+        kubectl apply --dry-run=client -f k8s/securecodebox-rbac.yaml
+        kubectl apply --dry-run=client -f k8s/securecodebox-operator.yaml
+        
+        # 驗證 Parser 服務
+        kubectl apply --dry-run=client -f k8s/parser-nuclei.yaml
+        kubectl apply --dry-run=client -f k8s/parser-amass.yaml
+
+  # 安全掃描
+  security-scan:
+    runs-on: ubuntu-latest
+    name: Security Scanning
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Run Trivy vulnerability scanner
+      uses: aquasecurity/trivy-action@master
+      with:
+        scan-type: 'fs'
+        scan-ref: '.'
+        format: 'sarif'
+        output: 'trivy-results.sarif'
+        
+    - name: Upload Trivy scan results to GitHub Security tab
+      uses: github/codeql-action/upload-sarif@v2
+      if: always()
+      with:
+        sarif_file: 'trivy-results.sarif'
+
+  # 文檔和代碼質量檢查
+  quality-check:
+    runs-on: ubuntu-latest
+    name: Code Quality and Documentation
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Check for broken links in documentation
+      uses: gaurav-nelson/github-action-markdown-link-check@v1
+      with:
+        use-quiet-mode: 'yes'
+        use-verbose-mode: 'yes'
+        config-file: '.github/markdown-link-check.json'
+        
+    - name: Validate YAML files
+      run: |
+        # 驗證 Docker Compose 文件
+        docker-compose -f Docker/compose/docker-compose.yml config
+        
+        # 驗證 Kubernetes YAML 文件
+        find k8s -name "*.yaml" -exec kubectl apply --dry-run=client -f {} \;
+        
+    - name: Check PowerShell script syntax
+      run: |
+        # 檢查 PowerShell 腳本語法
+        find . -name "*.ps1" -exec pwsh -NoProfile -Command "& { Get-Content '{}' | Out-Null }" \;

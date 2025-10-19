@@ -1,0 +1,9 @@
+{
+  "timestamp": "2025-10-15T15:16:05.142327",
+  "job_id": "d3nkk3hfk6qs73e92f7g",
+  "backend": "ibm_brisbane",
+  "zero_prob": 0.755859375,
+  "one_prob": 0.244140625,
+  "is_attack": false,
+  "confidence": 75.5859375
+}

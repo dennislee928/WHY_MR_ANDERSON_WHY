@@ -1,0 +1,56 @@
+# ================================
+# Pandora Box Console Terraform 變數範本
+# 複製此檔案為 terraform.tfvars 並填入實際值
+# 注意：terraform.tfvars 不要提交到 Git！
+# ================================
+
+# ================================
+# 環境配置
+# ================================
+environment  = "dev"
+project_name = "pandora-box-console"
+
+# ================================
+# Railway配置
+# ================================
+railway_project_id = "your-railway-project-id"
+railway_api_token  = "your-railway-api-token"
+postgres_password  = "your-strong-postgres-password"
+
+# ================================
+# Render 配置
+# ================================
+render_api_key = "your-render-api-key"
+
+# ================================
+# Koyeb 配置
+# ================================
+koyeb_api_token        = "your-koyeb-api-token"
+koyeb_organization_id  = "your-koyeb-org-id"
+
+# ================================
+# Patr.io 配置
+# ================================
+patr_api_token = "your-patr-api-token"
+
+# ================================
+# Fly.io 配置
+# ================================
+fly_api_token    = "your-fly-api-token"
+fly_organization = "personal"
+fly_region       = "nrt"
+
+# ================================
+# 應用配置
+# ================================
+grafana_admin_password = "your-strong-grafana-password"
+monitoring_volume_size = 10
+log_level              = "info"
+
+# ================================
+# Docker Images
+# ================================
+agent_image      = "ghcr.io/your-org/pandora-agent:latest"
+ui_image         = "ghcr.io/your-org/axiom-ui:latest"
+monitoring_image = "registry.fly.io/pandora-monitoring:latest"
+

@@ -1,0 +1,21 @@
+IBM Quantum Job Information
+======================================================================
+
+Circuit Name: bell_state
+Job ID: d3n21f1fk6qs73e8fo3g
+Backend: ibm_torino
+Submitted: 2025-10-14 18:07:25.687509
+Status: QUEUED
+Shots: 1024
+
+Original QASM:
+----------------------------------------------------------------------
+OPENQASM 2.0;
+include "qelib1.inc";
+qreg q[2];
+creg c[2];
+h q[0];
+cx q[0],q[1];
+measure q[0] -> c[0];
+measure q[1] -> c[1];
+----------------------------------------------------------------------

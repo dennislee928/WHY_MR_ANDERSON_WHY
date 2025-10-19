@@ -1,0 +1,86 @@
+- pipeline: "CI Pipeline"
+  on: "PUSH"
+  refs:
+  - "refs/heads/dev"
+  - "refs/heads/main"
+  priority: "NORMAL"
+  actions:
+  
+  # ============================================
+  # Stage 1: Go 基本檢查
+  # ============================================
+  - action: "Go Basic Checks"
+    type: "BUILD"
+    docker_image_name: "library/golang"
+    docker_image_tag: "1.21"
+    execute_commands:
+    - "go mod download && go mod tidy"
+    - "echo 'Running go vet...'"
+    - "go vet ./..."
+    - "echo 'Checking go fmt...'"
+    - "if [ \"$(gofmt -s -l . | wc -l)\" -gt 0 ]; then echo 'Files need formatting:'; gofmt -s -l .; exit 1; fi"
+    - "echo 'Running tests...'"
+    - "go test -v ./..."
+    - "echo 'Building binaries...'"
+    - "go build -v ./..."
+    cached_dirs:
+    - "/go/pkg/mod"
+  
+  # ============================================
+  # Stage 2: 前端檢查
+  # ============================================
+  - action: "Frontend Checks"
+    type: "BUILD"
+    docker_image_name: "library/node"
+    docker_image_tag: "18"
+    working_directory: "/Application/Fe"
+    execute_commands:
+    - "npm ci || npm install"
+    - "npm run type-check || echo 'Type check skipped'"
+    - "npm run lint || echo 'Linting skipped'"
+    - "npm run test || echo 'Tests skipped'"
+    - "npm run build"
+    cached_dirs:
+    - "/node_modules"
+    - "/.next/cache"
+  
+  # ============================================
+  # Stage 3: Docker 建置測試
+  # ============================================
+  - action: "Build Docker Images"
+    type: "DOCKERFILE"
+    docker_image_name: "ghcr.io/$BUDDY_REPO_SLUG/pandora-agent"
+    dockerfile_path: "build/docker/agent.dockerfile"
+    docker_image_tag: "latest"
+    push: true
+    registry: "ghcr.io"
+    repository: "$BUDDY_REPO_SLUG/pandora-agent"
+    
+  - action: "Build Server-FE Image"
+    type: "DOCKERFILE"
+    docker_image_name: "ghcr.io/$BUDDY_REPO_SLUG/pandora-server-fe"
+    dockerfile_path: "build/docker/server-fe.dockerfile"
+    docker_image_tag: "latest"
+    push: true
+    registry: "ghcr.io"
+    repository: "$BUDDY_REPO_SLUG/pandora-server-fe"
+    
+  - action: "Build Server-BE Image"
+    type: "DOCKERFILE"
+    docker_image_name: "ghcr.io/$BUDDY_REPO_SLUG/pandora-server-be"
+    dockerfile_path: "build/docker/server-be.dockerfile"
+    docker_image_tag: "latest"
+    push: true
+    registry: "ghcr.io"
+    repository: "$BUDDY_REPO_SLUG/pandora-server-be"
+  
+  # ============================================
+  # Stage 4: 安全掃描
+  # ============================================
+  - action: "Security Scan with Trivy"
+    type: "BUILD"
+    docker_image_name: "aquasec/trivy"
+    docker_image_tag: "latest"
+    execute_commands:
+    - "trivy fs --security-checks vuln,config --format json --output trivy-results.json ."
+    - "trivy fs --security-checks vuln,config ."

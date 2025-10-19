@@ -1,0 +1,54 @@
+# Fly.io 監控系統專用配置
+# 避免與 Next.js 自動偵測衝突
+
+app = "pandora-monitoring"
+primary_region = "nrt"
+
+# 明確指定使用 Docker 建置
+[build]
+  builder = "dockerfile"
+  dockerfile = "Dockerfile.monitoring"
+  build_args = []
+
+# 環境變數
+[env]
+  LOG_LEVEL = "info"
+  TZ = "Asia/Taipei"
+
+# HTTP 服務配置
+[http_service]
+  internal_port = 80
+  force_https = true
+  auto_stop_machines = false
+  auto_start_machines = true
+  min_machines_running = 1
+
+  [http_service.concurrency]
+    type = "connections"
+    hard_limit = 1000
+    soft_limit = 500
+
+# 健康檢查
+[http_service.checks]
+  [http_service.checks.health]
+    grace_period = "10s"
+    interval = "30s"
+    method = "GET"
+    path = "/health"
+    timeout = "5s"
+
+# 持久化儲存 - 合併到單一 volume 並限制大小
+[[mounts]]
+  source = "monitoring_data"
+  destination = "/data"
+  size_gb = 3
+
+# 進程配置
+[processes]
+  app = "supervisord -c /etc/supervisord.conf"
+
+# 資源限制
+[vm]
+  cpu_kind = "shared"
+  cpus = 1
+  memory_mb = 1024

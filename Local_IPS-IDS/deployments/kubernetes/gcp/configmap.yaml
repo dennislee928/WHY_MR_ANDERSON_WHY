@@ -1,0 +1,151 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: pandora-config
+  namespace: pandora-box
+data:
+  # Prometheus 配置
+  prometheus.yml: |
+    global:
+      scrape_interval: 15s
+      evaluation_interval: 15s
+    
+    rule_files:
+      - "/etc/prometheus/rules/*.yml"
+    
+    scrape_configs:
+      - job_name: 'prometheus'
+        static_configs:
+          - targets: ['localhost:9090']
+      
+      - job_name: 'pandora-agent'
+        static_configs:
+          - targets: ['pandora-agent:8080']
+      
+      - job_name: 'pandora-console'
+        static_configs:
+          - targets: ['pandora-console:3001']
+      
+      - job_name: 'grafana'
+        static_configs:
+          - targets: ['grafana:3000']
+      
+      - job_name: 'node-exporter'
+        static_configs:
+          - targets: ['node-exporter:9100']
+
+  # Loki 配置
+  loki.yaml: |
+    auth_enabled: false
+    server:
+      http_listen_port: 3100
+    
+    ingester:
+      lifecycler:
+        address: 127.0.0.1
+        ring:
+          kvstore:
+            store: inmemory
+          replication_factor: 1
+        final_sleep: 0s
+      chunk_idle_period: 5m
+      chunk_retain_period: 30s
+    
+    schema_config:
+      configs:
+        - from: 2020-10-24
+          store: boltdb
+          object_store: filesystem
+          schema: v11
+          index:
+            prefix: index_
+            period: 168h
+    
+    storage_config:
+      boltdb:
+        directory: /loki/index
+      filesystem:
+        directory: /loki/chunks
+    
+    limits_config:
+      enforce_metric_name: false
+      reject_old_samples: true
+      reject_old_samples_max_age: 168h
+
+  # Grafana 配置
+  grafana.ini: |
+    [server]
+    root_url = http://localhost:3000/
+    
+    [security]
+    admin_password = pandora123
+    secret_key = pandora-secret-key
+    
+    [users]
+    allow_sign_up = false
+    
+    [log]
+    mode = console
+    level = info
+    
+    [auth.anonymous]
+    enabled = true
+    org_role = Viewer
+
+  # Agent 配置
+  agent-config.yaml: |
+    device:
+      port: "/dev/ttyUSB0"
+      timeout: 30m
+      block_time: "20:00"
+      unlock_time: "08:00"
+    
+    logging:
+      level: "info"
+      format: "json"
+    
+    grafana:
+      url: "http://grafana:3000"
+    
+    prometheus:
+      url: "http://prometheus:9090"
+    
+    loki:
+      url: "http://loki:3100"
+    
+    mtls:
+      cert_path: "/certs/client.crt"
+      key_path: "/certs/client.key"
+
+  # Console 配置
+  console-config.yaml: |
+    server:
+      port: 3001
+      timeout: 30s
+    
+    auth:
+      default_psk: "pandora-default-key"
+      jwt_secret: "pandora-jwt-secret"
+    
+    logging:
+      level: "info"
+    
+    prometheus:
+      url: "http://prometheus:9090"
+    
+    grafana:
+      url: "http://grafana:3000"
+
+  # UI 配置
+  ui-config.yaml: |
+    server:
+      port: 3001
+    
+    api:
+      base_url: "http://pandora-console:3001/api/v1"
+    
+    grafana:
+      url: "http://grafana:3000"
+    
+    prometheus:
+      url: "http://prometheus:9090"

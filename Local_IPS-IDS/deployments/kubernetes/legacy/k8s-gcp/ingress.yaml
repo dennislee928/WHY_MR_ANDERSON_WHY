@@ -1,0 +1,70 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: pandora-ingress
+  namespace: pandora-box
+  annotations:
+    kubernetes.io/ingress.class: "gce"
+    kubernetes.io/ingress.global-static-ip-name: "pandora-gcp-ip"
+    networking.gke.io/managed-certificates: "pandora-gcp-ssl-cert"
+    kubernetes.io/ingress.allow-http: "false"
+    kubernetes.io/ingress.class: "gce"
+spec:
+  rules:
+  - host: pandora-gcp.yourdomain.com  # 需要替換為實際的網域
+    http:
+      paths:
+      # Grafana Dashboard
+      - path: /grafana
+        pathType: Prefix
+        backend:
+          service:
+            name: grafana
+            port:
+              number: 3000
+      
+      # Prometheus Metrics
+      - path: /prometheus
+        pathType: Prefix
+        backend:
+          service:
+            name: prometheus
+            port:
+              number: 9090
+      
+      # Pandora Console API
+      - path: /api
+        pathType: Prefix
+        backend:
+          service:
+            name: pandora-console
+            port:
+              number: 3001
+      
+      # Pandora Agent API
+      - path: /agent
+        pathType: Prefix
+        backend:
+          service:
+            name: pandora-agent
+            port:
+              number: 8080
+      
+      # Default route to Grafana
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: grafana
+            port:
+              number: 3000
+
+---
+apiVersion: networking.gke.io/v1
+kind: ManagedCertificate
+metadata:
+  name: pandora-gcp-ssl-cert
+  namespace: pandora-box
+spec:
+  domains:
+    - pandora-gcp.yourdomain.com  # 需要替換為實際的網域

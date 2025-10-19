@@ -1,0 +1,24 @@
+{
+  "agent_id": "TEST_LOW_RISK",
+  "hostname": "NORMAL-SERVER",
+  "timestamp": "2025-10-15 10:00:00",
+  "received_at": "2025-10-15T03:11:10.846784",
+  "log_count": 1,
+  "features": [
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0
+  ],
+  "risk_score": 0.0,
+  "logs": [
+    {
+      "event_id": 4624,
+      "user": "user1",
+      "message": "Successful login"
+    }
+  ],
+  "metadata": null
+}

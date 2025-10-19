@@ -1,0 +1,317 @@
+name:  (Temporaryly Disavbled)Deploy to PaaS Platforms
+
+on:
+  # 此 workflow 已停用（僅用於 main 分支的雲端部署）
+  # dev 分支使用地端部署，不需要 PaaS 平台
+  workflow_dispatch:
+    inputs:
+      platform:
+        description: '選擇部署平台'
+        required: true
+        type: choice
+        options:
+          - all
+          - railway
+          - render
+          - koyeb
+          - patr
+          - flyio
+
+env:
+  DOCKER_BUILDKIT: 1
+  GO_VERSION: '1.24'
+  NODE_VERSION: '18'
+
+jobs:
+  # 建置與測試
+  build-and-test:
+    name: Build and Test
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+
+      - name: Cache Go modules
+        uses: actions/cache@v3
+        with:
+          path: ~/go/pkg/mod
+          key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
+          restore-keys: |
+            ${{ runner.os }}-go-
+
+      - name: Download dependencies
+        run: go mod download
+
+      - name: Run tests
+        run: go test -v ./...
+
+      - name: Build Agent
+        run: go build -v -o bin/pandora-agent ./cmd/agent
+
+      - name: Build UI
+        run: go build -v -o bin/axiom-ui ./cmd/ui
+
+  # 部署 Railway (PostgreSQL)
+  deploy-railway:
+    name: Deploy to Railway (PostgreSQL)
+    needs: build-and-test
+    runs-on: ubuntu-latest
+    if: |
+      (github.event_name == 'push' && github.ref == 'refs/heads/main') ||
+      (github.event_name == 'workflow_dispatch' && 
+       (github.event.inputs.platform == 'all' || github.event.inputs.platform == 'railway'))
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install Railway CLI
+        run: npm install -g @railway/cli
+
+      - name: Deploy to Railway
+        env:
+          RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+        run: |
+          railway link --project ${{ secrets.RAILWAY_PROJECT_ID }}
+          railway up configs/postgres/init.sql
+
+  # 部署 Render (Redis + Nginx)
+  deploy-render:
+    name: Deploy to Render
+    needs: build-and-test
+    runs-on: ubuntu-latest
+    if: |
+      (github.event_name == 'push' && github.ref == 'refs/heads/main') ||
+      (github.event_name == 'workflow_dispatch' && 
+       (github.event.inputs.platform == 'all' || github.event.inputs.platform == 'render'))
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Deploy to Render
+        env:
+          RENDER_API_KEY: ${{ secrets.RENDER_API_KEY }}
+        run: |
+          curl -X POST https://api.render.com/v1/services/${{ secrets.RENDER_SERVICE_ID }}/deploys \
+            -H "Authorization: Bearer $RENDER_API_KEY" \
+            -H "Content-Type: application/json" \
+            -d '{"clearCache": false}'
+
+  # 部署 Koyeb (Pandora Agent)
+  deploy-koyeb:
+    name: Deploy to Koyeb (Agent)
+    needs: build-and-test
+    runs-on: ubuntu-latest
+    if: |
+      (github.event_name == 'push' && github.ref == 'refs/heads/main') ||
+      (github.event_name == 'workflow_dispatch' && 
+       (github.event.inputs.platform == 'all' || github.event.inputs.platform == 'koyeb'))
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Login to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKER_USERNAME }}
+          password: ${{ secrets.DOCKER_PASSWORD }}
+
+      - name: Build and push Agent image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: ./build/docker/agent.koyeb.dockerfile
+          push: true
+          tags: ${{ secrets.DOCKER_USERNAME }}/pandora-agent:latest
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Install Koyeb CLI
+        run: |
+          curl -fsSL https://cli.koyeb.com/install.sh | bash
+          echo "$HOME/.koyeb/bin" >> $GITHUB_PATH
+
+      - name: Deploy to Koyeb
+        env:
+          KOYEB_TOKEN: ${{ secrets.KOYEB_TOKEN }}
+        run: |
+          koyeb service redeploy pandora-agent/pandora-agent
+
+  # 部署 Patr.io (Axiom UI)
+  deploy-patr:
+    name: Deploy to Patr.io (UI)
+    needs: build-and-test
+    runs-on: ubuntu-latest
+    if: |
+      (github.event_name == 'push' && github.ref == 'refs/heads/main') ||
+      (github.event_name == 'workflow_dispatch' && 
+       (github.event.inputs.platform == 'all' || github.event.inputs.platform == 'patr'))
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Login to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKER_USERNAME }}
+          password: ${{ secrets.DOCKER_PASSWORD }}
+
+      - name: Build and push UI image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: ./build/docker/ui.patr.dockerfile
+          push: true
+          tags: ${{ secrets.DOCKER_USERNAME }}/axiom-ui:latest
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Deploy to Patr.io
+        env:
+          PATR_API_TOKEN: ${{ secrets.PATR_API_TOKEN }}
+        run: |
+          curl -X POST https://api.patr.cloud/api/v1/deployments/${{ secrets.PATR_DEPLOYMENT_ID }}/trigger \
+            -H "Authorization: Bearer $PATR_API_TOKEN" \
+            -H "Content-Type: application/json"
+
+  # 部署 Fly.io (監控系統)
+  deploy-flyio:
+    name: Deploy to Fly.io (Monitoring)
+    needs: build-and-test
+    runs-on: ubuntu-latest
+    if: |
+      (github.event_name == 'push' && github.ref == 'refs/heads/main') ||
+      (github.event_name == 'workflow_dispatch' && 
+       (github.event.inputs.platform == 'all' || github.event.inputs.platform == 'flyio'))
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Fly.io CLI
+        uses: superfly/flyctl-actions/setup-flyctl@master
+
+      - name: Deploy to Fly.io
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+        run: |
+          flyctl deploy --config deployments/paas/flyio/fly.toml --dockerfile build/docker/monitoring.dockerfile --remote-only
+
+  # 驗證部署
+  verify-deployment:
+    name: Verify Deployment
+    needs: [deploy-railway, deploy-render, deploy-koyeb, deploy-patr, deploy-flyio]
+    runs-on: ubuntu-latest
+    if: always()
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y curl jq postgresql-client redis-tools
+
+      - name: Load environment variables
+        run: |
+          echo "RAILWAY_DATABASE_URL=${{ secrets.RAILWAY_DATABASE_URL }}" >> $GITHUB_ENV
+          echo "RENDER_REDIS_URL=${{ secrets.RENDER_REDIS_URL }}" >> $GITHUB_ENV
+          echo "KOYEB_AGENT_URL=${{ secrets.KOYEB_AGENT_URL }}" >> $GITHUB_ENV
+          echo "PATR_UI_URL=${{ secrets.PATR_UI_URL }}" >> $GITHUB_ENV
+          echo "PROMETHEUS_URL=${{ secrets.PROMETHEUS_URL }}" >> $GITHUB_ENV
+          echo "LOKI_URL=${{ secrets.LOKI_URL }}" >> $GITHUB_ENV
+          echo "GRAFANA_URL=${{ secrets.GRAFANA_URL }}" >> $GITHUB_ENV
+          echo "ALERTMANAGER_URL=${{ secrets.ALERTMANAGER_URL }}" >> $GITHUB_ENV
+
+      - name: Verify Koyeb Agent
+        run: |
+          echo "Verifying Koyeb Agent..."
+          curl -f $KOYEB_AGENT_URL/health || exit 1
+
+      - name: Verify Patr.io UI
+        run: |
+          echo "Verifying Patr.io UI..."
+          curl -f $PATR_UI_URL/api/v1/status || exit 1
+
+      - name: Verify Fly.io Prometheus
+        run: |
+          echo "Verifying Prometheus..."
+          curl -f $PROMETHEUS_URL/-/healthy || exit 1
+
+      - name: Verify Fly.io Loki
+        run: |
+          echo "Verifying Loki..."
+          curl -f $LOKI_URL/ready || exit 1
+
+      - name: Verify Fly.io Grafana
+        run: |
+          echo "Verifying Grafana..."
+          curl -f $GRAFANA_URL/api/health || exit 1
+
+      - name: Verify Fly.io AlertManager
+        run: |
+          echo "Verifying AlertManager..."
+          curl -f $ALERTMANAGER_URL/-/healthy || exit 1
+
+      - name: Generate deployment report
+        if: always()
+        run: |
+          echo "# PaaS Deployment Report" > deployment-report.md
+          echo "" >> deployment-report.md
+          echo "## Deployment Status" >> deployment-report.md
+          echo "" >> deployment-report.md
+          echo "- Railway (PostgreSQL): ${{ needs.deploy-railway.result }}" >> deployment-report.md
+          echo "- Render (Redis + Nginx): ${{ needs.deploy-render.result }}" >> deployment-report.md
+          echo "- Koyeb (Agent): ${{ needs.deploy-koyeb.result }}" >> deployment-report.md
+          echo "- Patr.io (UI): ${{ needs.deploy-patr.result }}" >> deployment-report.md
+          echo "- Fly.io (Monitoring): ${{ needs.deploy-flyio.result }}" >> deployment-report.md
+          echo "" >> deployment-report.md
+          echo "Deployment completed at: $(date)" >> deployment-report.md
+
+      - name: Upload deployment report
+        if: always()
+        uses: actions/upload-artifact@v3
+        with:
+          name: deployment-report
+          path: deployment-report.md
+
+  # 通知
+  notify:
+    name: Notification
+    needs: verify-deployment
+    runs-on: ubuntu-latest
+    if: always()
+    steps:
+      - name: Send Slack notification
+        if: ${{ env.SLACK_WEBHOOK_URL != '' }}
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+        run: |
+          STATUS="${{ needs.verify-deployment.result }}"
+          COLOR=$([[ "$STATUS" == "success" ]] && echo "good" || echo "danger")
+          
+          curl -X POST $SLACK_WEBHOOK_URL \
+            -H 'Content-Type: application/json' \
+            -d "{
+              \"attachments\": [{
+                \"color\": \"$COLOR\",
+                \"title\": \"Pandora Box PaaS Deployment\",
+                \"text\": \"Deployment $STATUS\",
+                \"fields\": [
+                  {\"title\": \"Repository\", \"value\": \"${{ github.repository }}\", \"short\": true},
+                  {\"title\": \"Branch\", \"value\": \"${{ github.ref_name }}\", \"short\": true},
+                  {\"title\": \"Commit\", \"value\": \"${{ github.sha }}\", \"short\": true},
+                  {\"title\": \"Actor\", \"value\": \"${{ github.actor }}\", \"short\": true}
+                ]
+              }]
+            }"
+

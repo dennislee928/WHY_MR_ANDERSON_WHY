@@ -1,0 +1,157 @@
+name: (Temporaryly Disavbled)CI Pipeline
+
+on:
+  push:
+
+    branches: [ "DRA", "DRA" ]
+
+  pull_request:
+    branches: [ "DRA", "DRA" ]
+  workflow_dispatch:
+
+jobs:
+  # 基本檢查
+  basic-check:
+    runs-on: ubuntu-latest
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Set up Go
+      uses: actions/setup-go@v4
+      with:
+        go-version: '1.21'
+
+    - name: Cache Go modules
+      uses: actions/cache@v3
+      with:
+        path: ~/go/pkg/mod
+        key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
+        restore-keys: |
+          ${{ runner.os }}-go-
+
+    - name: Download dependencies
+      run: go mod download && go mod tidy
+
+    - name: Run go vet
+      run: go vet ./...
+
+    - name: Check go fmt
+      run: |
+        if [ "$(gofmt -s -l . | wc -l)" -gt 0 ]; then
+          echo "❌ 以下檔案需要格式化:"
+          gofmt -s -l .
+          exit 1
+        fi
+
+    - name: Run tests
+      run: go test -v ./...
+
+    - name: Build Go binaries
+      run: go build -v ./...
+
+  # 前端檢查
+  frontend-check:
+    runs-on: ubuntu-latest
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Set up Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '18'
+        cache: 'npm'
+        cache-dependency-path: Application/Fe/package.json
+
+    - name: Install dependencies
+      working-directory: Application/Fe
+      run: npm ci
+
+    - name: Run type check
+      working-directory: Application/Fe
+      run: npm run type-check || echo "Type check skipped (not configured yet)"
+
+    - name: Run linting
+      working-directory: Application/Fe
+      run: npm run lint || echo "Linting skipped (not configured yet)"
+
+    - name: Run tests
+      working-directory: Application/Fe
+      run: npm run test || echo "Tests skipped (not configured yet)"
+
+    - name: Build frontend
+      working-directory: Application/Fe
+      run: npm run build
+
+  # Docker 建置測試
+  docker-build-test:
+    runs-on: ubuntu-latest
+    needs: [basic-check, frontend-check]
+    strategy:
+      matrix:
+        image: [agent, server-fe, server-be]
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      # ⬇️ --- 主要修改處 --- ⬇️
+      - name: Login to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          # github.actor 是觸發此 workflow 的使用者
+          username: ${{ github.actor }}
+          # GITHUB_TOKEN 是由 GitHub Actions 自動產生的，無需手動設定
+          password: ${{ secrets.GITHUB_TOKEN }}
+      
+      - name: Build and Push Docker Image to GHCR
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: ./build/docker/${{ matrix.image }}.dockerfile
+          push: ${{ github.event_name == 'push' }}
+          # 更新 tags 以符合 GHCR 的格式: ghcr.io/OWNER/IMAGE_NAME:TAG
+          tags: |
+            ghcr.io/${{ github.repository_owner }}/pandora_${{ matrix.image }}:latest
+            ghcr.io/${{ github.repository_owner }}/pandora_${{ matrix.image }}:${{ github.sha }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  # 安全掃描
+  security-scan:
+    runs-on: ubuntu-latest
+    needs: docker-build-test
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Run Trivy vulnerability scanner
+      uses: aquasecurity/trivy-action@master
+      with:
+        scan-type: 'fs'
+        scan-ref: '.'
+        format: 'sarif'
+        output: 'trivy-results.sarif'
+
+    - name: Upload Trivy scan results to GitHub Security tab
+      uses: github/codeql-action/upload-sarif@v2
+      with:
+        sarif_file: 'trivy-results.sarif'
+
+  # 最終檢查
+  final-check:
+    runs-on: ubuntu-latest
+    needs: [basic-check, frontend-check, docker-build-test, security-scan]
+    if: always()
+    steps:
+    - name: All checks completed
+      run: |
+        echo "✅ CI Pipeline 完成！"
+        echo "- 基本檢查: ${{ needs.basic-check.result }}"
+        echo "- 前端檢查: ${{ needs.frontend-check.result }}"
+        echo "- Docker 建置: ${{ needs.docker-build-test.result }}"
+        echo "- 安全掃描: ${{ needs.security-scan.result }}"

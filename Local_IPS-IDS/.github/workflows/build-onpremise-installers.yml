@@ -1,0 +1,1037 @@
+name: Build On-Premise Installers
+
+on:
+  push:
+    branches:
+      - main
+      
+     
+    tags:
+      - 'v*'
+  pull_request:
+    branches:
+
+      - main
+
+  workflow_dispatch:
+    inputs:
+      version:
+        description: '版本號（例如：1.0.0）'
+        required: false
+        default: 'dev'
+
+env:
+  GO_VERSION: '1.21'
+  NODE_VERSION: '18'
+  PRODUCT_NAME: 'Pandora Box Console IDS-IPS'
+  
+jobs:
+  # 準備工作：取得版本資訊和構建環境
+  prepare:
+    name: 準備構建環境
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+      build_date: ${{ steps.version.outputs.build_date }}
+      git_commit: ${{ steps.version.outputs.git_commit }}
+    steps:
+      - name: Checkout 程式碼
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      
+      - name: 取得版本資訊
+        id: version
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          INPUT_VERSION: ${{ github.event.inputs.version }}
+          GITHUB_REF: ${{ github.ref }}
+        run: |
+          if [[ "$EVENT_NAME" == "workflow_dispatch" && -n "$INPUT_VERSION" ]]; then
+            VERSION="$INPUT_VERSION"
+          elif [[ "$GITHUB_REF" == refs/tags/* ]]; then
+            VERSION="${GITHUB_REF#refs/tags/v}"
+          else
+            # 嘗試取得最近的 tag，如果沒有則使用分支名 + commit hash
+            LATEST_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "")
+            if [[ -n "$LATEST_TAG" ]]; then
+              # 如果有 tag，使用 tag + commit count + hash
+              TAG_VERSION="${LATEST_TAG#v}"  # 移除 v 前綴
+              COMMIT_COUNT=$(git rev-list --count HEAD ^$(git rev-list --max-parents=0 HEAD))
+              SHORT_HASH=$(git rev-parse --short HEAD)
+              VERSION="${TAG_VERSION}.${COMMIT_COUNT}+${SHORT_HASH}"
+            else
+              # 沒有 tag 時，使用分支名 + commit hash
+              BRANCH_NAME="${{ github.ref_name }}"
+              SHORT_HASH=$(git rev-parse --short HEAD)
+              VERSION="0.1.0+${BRANCH_NAME}.${SHORT_HASH}"
+            fi
+          fi
+          
+          # 確保版本號以數字開頭
+          if [[ ! "$VERSION" =~ ^[0-9] ]]; then
+            VERSION="0.1.0+${VERSION}"
+          fi
+          
+          BUILD_DATE=$(date -u '+%Y-%m-%d_%H:%M:%S')
+          GIT_COMMIT=$(git rev-parse --short HEAD)
+          
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "build_date=$BUILD_DATE" >> $GITHUB_OUTPUT
+          echo "git_commit=$GIT_COMMIT" >> $GITHUB_OUTPUT
+          
+          echo "版本: $VERSION"
+          echo "構建日期: $BUILD_DATE"
+          echo "Git Commit: $GIT_COMMIT"
+
+  # 構建後端（Go）
+  build-backend:
+    name: 構建後端程式
+    needs: prepare
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+        arch: [amd64, arm64]
+        exclude:
+          - os: windows-latest
+            arch: arm64
+    steps:
+      - name: Checkout 程式碼
+        uses: actions/checkout@v4
+      
+      - name: 設定 Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache: true
+          cache-dependency-path: go.sum
+      
+      - name: 下載依賴
+        run: |
+          go mod download
+          go mod verify
+      
+      - name: 設定檔案名稱後綴
+        id: setup
+        shell: bash
+        run: |
+          if [ "${{ matrix.os }}" == "windows-latest" ]; then
+            echo "binary_ext=.exe" >> $GITHUB_OUTPUT
+          else
+            echo "binary_ext=" >> $GITHUB_OUTPUT
+          fi
+      
+      - name: Build backend binaries (Windows)
+        if: matrix.os == 'windows-latest'
+        env:
+          VERSION: ${{ needs.prepare.outputs.version }}
+          BUILD_DATE: ${{ needs.prepare.outputs.build_date }}
+          GIT_COMMIT: ${{ needs.prepare.outputs.git_commit }}
+          GOOS: windows
+          GOARCH: ${{ matrix.arch }}
+          CGO_ENABLED: 0
+        shell: powershell
+        run: |
+          New-Item -ItemType Directory -Force -Path "dist/backend"
+          $LDFLAGS = "-s -w -X main.Version=$env:VERSION -X main.BuildTime=$env:BUILD_DATE -X main.GitCommit=$env:GIT_COMMIT"
+          go mod download
+          go mod verify
+          Write-Host "Building Agent (GOOS=$env:GOOS, GOARCH=$env:GOARCH)..." -ForegroundColor Cyan
+          go build -ldflags="$LDFLAGS" -o "dist/backend/pandora-agent.exe" ./cmd/agent/main.go
+          if ($LASTEXITCODE -ne 0) { Write-Host "[ERROR] Agent build failed" -ForegroundColor Red; exit 1 }
+          Write-Host "Building Console (GOOS=$env:GOOS, GOARCH=$env:GOARCH)..." -ForegroundColor Cyan
+          go build -ldflags="$LDFLAGS" -o "dist/backend/pandora-console.exe" ./cmd/console/main.go
+          if ($LASTEXITCODE -ne 0) { Write-Host "[ERROR] Console build failed" -ForegroundColor Red; exit 1 }
+          Write-Host "Building UI Server (GOOS=$env:GOOS, GOARCH=$env:GOARCH)..." -ForegroundColor Cyan
+          go build -ldflags="$LDFLAGS" -o "dist/backend/axiom-ui.exe" ./cmd/ui/main.go
+          if ($LASTEXITCODE -ne 0) { Write-Host "[ERROR] UI Server build failed" -ForegroundColor Red; exit 1 }
+          Write-Host "[SUCCESS] All backend binaries built successfully" -ForegroundColor Green
+      
+      - name: Build backend binaries (Linux/Mac)
+        if: matrix.os != 'windows-latest'
+        env:
+          VERSION: ${{ needs.prepare.outputs.version }}
+          BUILD_DATE: ${{ needs.prepare.outputs.build_date }}
+          GIT_COMMIT: ${{ needs.prepare.outputs.git_commit }}
+          GOOS: ${{ matrix.os == 'ubuntu-latest' && 'linux' || 'darwin' }}
+          GOARCH: ${{ matrix.arch }}
+          CGO_ENABLED: 0
+        shell: bash
+        run: |
+          mkdir -p dist/backend
+          LDFLAGS="-s -w -X main.Version=$VERSION -X main.BuildTime=$BUILD_DATE -X main.GitCommit=$GIT_COMMIT"
+          go mod download
+          go mod verify
+          echo "Building Agent (GOOS=$GOOS, GOARCH=$GOARCH)..."
+          go build -ldflags="$LDFLAGS" -o "dist/backend/pandora-agent" ./cmd/agent/main.go
+          if [ $? -ne 0 ]; then echo "[ERROR] Agent build failed"; exit 1; fi
+          echo "Building Console (GOOS=$GOOS, GOARCH=$GOARCH)..."
+          go build -ldflags="$LDFLAGS" -o "dist/backend/pandora-console" ./cmd/console/main.go
+          if [ $? -ne 0 ]; then echo "[ERROR] Console build failed"; exit 1; fi
+          echo "Building UI Server (GOOS=$GOOS, GOARCH=$GOARCH)..."
+          go build -ldflags="$LDFLAGS" -o "dist/backend/axiom-ui" ./cmd/ui/main.go
+          if [ $? -ne 0 ]; then echo "[ERROR] UI Server build failed"; exit 1; fi
+          echo "[SUCCESS] All backend binaries built successfully"
+      
+      - name: Copy config files (Windows)
+        if: matrix.os == 'windows-latest'
+        shell: powershell
+        run: |
+          Write-Host "Copying configuration files..." -ForegroundColor Cyan
+          if (Test-Path "configs") { Copy-Item -Path "configs" -Destination "dist/backend/" -Recurse -Force; Write-Host "[SUCCESS] configs directory copied" -ForegroundColor Green } else { Write-Host "[WARNING] configs directory not found" -ForegroundColor Yellow }
+          if (Test-Path "scripts") { Copy-Item -Path "scripts" -Destination "dist/backend/" -Recurse -Force; Write-Host "[SUCCESS] scripts directory copied" -ForegroundColor Green } else { Write-Host "[WARNING] scripts directory not found, skipping" -ForegroundColor Yellow }
+          Write-Host "Backend artifacts structure:" -ForegroundColor Cyan
+          Get-ChildItem -Path "dist/backend" -Recurse | Format-Table Name, Length, LastWriteTime -AutoSize
+      
+      - name: Copy config files (Linux/Mac)
+        if: matrix.os != 'windows-latest'
+        shell: bash
+        run: |
+          echo "Copying configuration files..."
+          if [ -d "configs" ]; then cp -r configs dist/backend/; echo "[SUCCESS] configs directory copied"; else echo "[WARNING] configs directory not found"; fi
+          if [ -d "scripts" ]; then cp -r scripts dist/backend/; echo "[SUCCESS] scripts directory copied"; else echo "[WARNING] scripts directory not found, skipping"; fi
+          echo "Backend artifacts structure:"
+          ls -la dist/backend/
+      
+      - name: 上傳構建產物
+        uses: actions/upload-artifact@v4
+        with:
+          name: backend-${{ matrix.os }}-${{ matrix.arch }}
+          path: dist/backend/
+          retention-days: 7
+
+  # 構建前端（Next.js）
+  build-frontend:
+    name: 構建前端應用程式
+    needs: prepare
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout 程式碼
+        uses: actions/checkout@v4
+      
+      - name: 設定 Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+          cache-dependency-path: Application/Fe/package.json
+      
+      - name: 檢查前端目錄
+        run: |
+          echo "檢查 Application/Fe 目錄結構..."
+          ls -la Application/Fe/ || echo "Application/Fe 目錄不存在"
+          if [ -f "Application/Fe/package.json" ]; then
+            echo "[SUCCESS] package.json 存在"
+            cat Application/Fe/package.json | head -10
+          else
+            echo "[ERROR] package.json 不存在"
+            exit 1
+          fi
+      
+      - name: 檢查並生成 package-lock.json
+        working-directory: Application/Fe
+        run: |
+          echo "當前目錄: $(pwd)"
+          echo "目錄內容:"
+          ls -la
+          
+          if [ ! -f "package-lock.json" ]; then
+            echo "[WARNING] package-lock.json 不存在，正在生成..."
+            npm install --package-lock-only
+            if [ $? -ne 0 ]; then
+              echo "[ERROR] 生成 package-lock.json 失敗"
+              exit 1
+            fi
+            echo "[SUCCESS] package-lock.json 已生成"
+          else
+            echo "[SUCCESS] package-lock.json 已存在"
+          fi
+      
+      - name: 安裝依賴
+        working-directory: Application/Fe
+        run: |
+          echo "正在安裝依賴..."
+          if [ -f "package-lock.json" ]; then
+            echo "使用 npm ci..."
+            npm ci
+          else
+            echo "使用 npm install..."
+            npm install
+          fi
+          
+          if [ $? -ne 0 ]; then
+            echo "[ERROR] 依賴安裝失敗"
+            exit 1
+          fi
+          echo "[SUCCESS] 依賴安裝完成"
+      
+      - name: 構建前端
+        working-directory: Application/Fe
+        env:
+          NEXT_PUBLIC_APP_VERSION: ${{ needs.prepare.outputs.version }}
+          NODE_ENV: production
+        run: |
+          echo "正在構建前端應用程式..."
+          echo "環境變數:"
+          echo "  NEXT_PUBLIC_APP_VERSION: $NEXT_PUBLIC_APP_VERSION"
+          echo "  NODE_ENV: $NODE_ENV"
+          
+          npm run build
+          if [ $? -ne 0 ]; then
+            echo "[ERROR] 前端構建失敗"
+            exit 1
+          fi
+          
+          echo "[SUCCESS] 前端構建完成"
+          echo "構建產物:"
+          ls -la .next/ || echo "未找到 .next 目錄"
+          
+          # 創建獨立部署包
+          mkdir -p ../../dist/frontend
+          if [ -d ".next/standalone" ]; then
+            echo "複製 standalone 產物..."
+            cp -r .next/standalone/* ../../dist/frontend/
+          else
+            echo "[WARNING] 未找到 .next/standalone，嘗試複製整個 .next 目錄"
+            cp -r .next ../../dist/frontend/.next/
+          fi
+          
+          if [ -d ".next/static" ]; then
+            echo "複製 static 資源..."
+            cp -r .next/static ../../dist/frontend/.next/
+          fi
+          
+          if [ -d "public" ]; then
+            echo "複製 public 資源..."
+            cp -r public ../../dist/frontend/
+          fi
+          
+          echo "[SUCCESS] 前端產物複製完成"
+          ls -la ../../dist/frontend/
+      
+      - name: 上傳構建產物
+        uses: actions/upload-artifact@v4
+        with:
+          name: frontend
+          path: dist/frontend/
+          retention-days: 7
+
+  # 構建 Windows 安裝檔（.exe 和 .msi）
+  build-windows-installer:
+    name: 構建 Windows 安裝檔
+    needs: [prepare, build-backend, build-frontend]
+    runs-on: windows-latest
+    steps:
+      - name: Checkout 程式碼
+        uses: actions/checkout@v4
+      
+      - name: 下載後端構建產物
+        uses: actions/download-artifact@v4
+        with:
+          name: backend-windows-latest-amd64
+          path: installer/backend
+      
+      - name: 下載前端構建產物
+        uses: actions/download-artifact@v4
+        with:
+          name: frontend
+          path: installer/frontend
+      
+      - name: 安裝 Inno Setup
+        run: |
+          Write-Host "Attempting to install Inno Setup via Chocolatey..." -ForegroundColor Cyan
+          try {
+            choco install innosetup -y
+            if ($LASTEXITCODE -ne 0) { throw "Chocolatey installation failed" }
+          } catch {
+            Write-Host "Chocolatey failed, trying direct download..." -ForegroundColor Yellow
+            $innosetupUrl = "https://files.jrsoftware.org/is/6/innosetup-6.5.4.exe"
+            $installerPath = "$env:TEMP\innosetup-installer.exe"
+            Invoke-WebRequest -Uri $innosetupUrl -OutFile $installerPath
+            Start-Process -FilePath $installerPath -ArgumentList "/SILENT", "/DIR=C:\Program Files (x86)\Inno Setup 6" -Wait
+            if ($LASTEXITCODE -ne 0) { Write-Host "[ERROR] Inno Setup installation failed" -ForegroundColor Red; exit 1 }
+            Write-Host "[SUCCESS] Inno Setup installed via direct download" -ForegroundColor Green
+          }
+      
+      - name: 創建 Inno Setup 腳本
+        run: |
+          $version = "${{ needs.prepare.outputs.version }}"
+          
+          @"
+          #define MyAppName "${{ env.PRODUCT_NAME }}"
+          #define MyAppVersion "$version"
+          #define MyAppPublisher "Pandora Security Team"
+          #define MyAppURL "https://github.com/your-org/pandora_box_console_IDS-IPS"
+          #define MyAppExeName "pandora-agent.exe"
+
+          [Setup]
+          AppId={{PANDORA-BOX-CONSOLE-IDS-IPS}
+          AppName={#MyAppName}
+          AppVersion={#MyAppVersion}
+          AppPublisher={#MyAppPublisher}
+          AppPublisherURL={#MyAppURL}
+          DefaultDirName={autopf}\PandoraBox
+          DefaultGroupName={#MyAppName}
+          OutputBaseFilename=pandora-box-console-$version-windows-amd64-setup
+          OutputDir=dist
+          Compression=lzma2
+          SolidCompression=yes
+          WizardStyle=modern
+          PrivilegesRequired=admin
+          ArchitecturesAllowed=x64
+          ArchitecturesInstallIn64BitMode=x64
+
+          [Languages]
+          Name: "english"; MessagesFile: "compiler:Default.isl"
+
+          [Tasks]
+          Name: "desktopicon"; Description: "Create desktop shortcut"; GroupDescription: "Additional icons:"; Flags: unchecked
+          Name: "quicklaunchicon"; Description: "Create quick launch shortcut"; GroupDescription: "Additional icons:"; Flags: unchecked
+
+          [Files]
+          Source: "backend\*"; DestDir: "{app}\backend"; Flags: ignoreversion recursesubdirs createallsubdirs
+          Source: "frontend\*"; DestDir: "{app}\frontend"; Flags: ignoreversion recursesubdirs createallsubdirs
+
+          [Icons]
+          Name: "{group}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"
+          Name: "{group}\{cm:UninstallProgram,{#MyAppName}}"; Filename: "{uninstallexe}"
+          Name: "{autodesktop}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; Tasks: desktopicon
+          Name: "{userappdata}\Microsoft\Internet Explorer\Quick Launch\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; Tasks: quicklaunchicon
+
+          [Run]
+          Filename: "{app}\{#MyAppExeName}"; Description: "{cm:LaunchProgram,{#StringChange(MyAppName, '&', '&&')}}"; Flags: nowait postinstall skipifsilent
+
+          [Code]
+          function InitializeSetup(): Boolean;
+          begin
+            Result := True;
+            if not IsAdminLoggedOn() then
+            begin
+              MsgBox('This program requires administrator privileges to install.', mbError, MB_OK);
+              Result := False;
+            end;
+          end;
+          "@ | Out-File -FilePath installer\setup.iss -Encoding UTF8
+      
+      - name: Build Windows installer
+        run: |
+          New-Item -ItemType Directory -Force -Path "installer\dist" | Out-Null
+          New-Item -ItemType Directory -Force -Path "dist" | Out-Null
+          Push-Location installer
+          & "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" setup.iss
+          Pop-Location
+          if (Test-Path "installer\dist\*.exe") { Move-Item -Path "installer\dist\*.exe" -Destination "dist\" -Force }
+      
+      - name: 上傳 Windows 安裝程式
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-installer
+          path: dist/*.exe
+          retention-days: 30
+
+  # 構建 Linux 套件（.deb 和 .rpm）
+  build-linux-packages:
+    name: 構建 Linux 套件
+    needs: [prepare, build-backend, build-frontend]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout 程式碼
+        uses: actions/checkout@v4
+      
+      - name: 下載後端構建產物
+        uses: actions/download-artifact@v4
+        with:
+          name: backend-ubuntu-latest-amd64
+          path: package/backend
+      
+      - name: 下載前端構建產物
+        uses: actions/download-artifact@v4
+        with:
+          name: frontend
+          path: package/frontend
+      
+      - name: 安裝打包工具
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y dpkg-dev rpm
+      
+      - name: 創建 DEB 套件結構
+        run: |
+          VERSION="${{ needs.prepare.outputs.version }}"
+          PACKAGE_NAME="pandora-box-console"
+          
+          mkdir -p debian/DEBIAN
+          mkdir -p debian/opt/pandora-box/{backend,frontend,configs}
+          mkdir -p debian/etc/systemd/system
+          mkdir -p debian/usr/local/bin
+          
+          # 複製檔案
+          cp -r package/backend/* debian/opt/pandora-box/backend/
+          cp -r package/frontend/* debian/opt/pandora-box/frontend/
+          
+          # 設定執行權限
+          chmod +x debian/opt/pandora-box/backend/*
+          
+          # 創建 systemd 服務檔案
+          cat > debian/etc/systemd/system/pandora-agent.service <<EOF
+          [Unit]
+          Description=Pandora Box Console Agent
+          After=network.target
+
+          [Service]
+          Type=simple
+          User=root
+          WorkingDirectory=/opt/pandora-box/backend
+          ExecStart=/opt/pandora-box/backend/pandora-agent --config /opt/pandora-box/backend/configs/agent-config.yaml
+          Restart=on-failure
+          RestartSec=10
+
+          [Install]
+          WantedBy=multi-user.target
+          EOF
+          
+          # 創建控制檔案
+          cat > debian/DEBIAN/control <<EOF
+          Package: $PACKAGE_NAME
+          Version: $VERSION
+          Section: net
+          Priority: optional
+          Architecture: amd64
+          Depends: libc6 (>= 2.31), postgresql-client, redis-tools
+          Maintainer: Pandora Security Team <support@pandora-ids.com>
+          Description: Pandora Box Console IDS-IPS System
+           一個基於 USB-SERIAL CH340 的智慧型入侵偵測與防護系統。
+           整合了現代化的監控、日誌聚合、威脅分析和視覺化技術。
+          EOF
+          
+          # 創建安裝後腳本
+          cat > debian/DEBIAN/postinst <<'EOF'
+          #!/bin/bash
+          set -e
+          
+          echo "正在配置 Pandora Box Console..."
+          
+          # 重新載入 systemd
+          systemctl daemon-reload
+          
+          # 啟用服務（但不自動啟動）
+          systemctl enable pandora-agent.service
+          
+          echo "安裝完成！使用 'systemctl start pandora-agent' 啟動服務。"
+          EOF
+          
+          chmod 755 debian/DEBIAN/postinst
+          
+          # 創建輸出目錄
+          mkdir -p dist
+          
+          # 構建 DEB 套件
+          dpkg-deb --build debian dist/${PACKAGE_NAME}_${VERSION}_amd64.deb
+      
+      - name: 創建 RPM 套件
+        run: |
+          VERSION="${{ needs.prepare.outputs.version }}"
+          PACKAGE_NAME="pandora-box-console"
+          
+          mkdir -p ~/rpmbuild/{BUILD,RPMS,SOURCES,SPECS,SRPMS}
+          
+          # 創建 spec 檔案
+          cat > ~/rpmbuild/SPECS/${PACKAGE_NAME}.spec <<EOF
+          Name:           $PACKAGE_NAME
+          Version:        $VERSION
+          Release:        1%{?dist}
+          Summary:        Pandora Box Console IDS-IPS System
+          
+          License:        MIT
+          URL:            https://github.com/your-org/pandora_box_console_IDS-IPS
+          Source0:        %{name}-%{version}.tar.gz
+          
+          Requires:       glibc >= 2.31, postgresql, redis
+          
+          %description
+          一個基於 USB-SERIAL CH340 的智慧型入侵偵測與防護系統。
+          整合了現代化的監控、日誌聚合、威脅分析和視覺化技術。
+          
+          %prep
+          
+          %build
+          
+          %install
+          rm -rf \$RPM_BUILD_ROOT
+          mkdir -p \$RPM_BUILD_ROOT/opt/pandora-box/{backend,frontend}
+          mkdir -p \$RPM_BUILD_ROOT/etc/systemd/system
+          
+          cp -r package/backend/* \$RPM_BUILD_ROOT/opt/pandora-box/backend/
+          cp -r package/frontend/* \$RPM_BUILD_ROOT/opt/pandora-box/frontend/
+          
+          cat > \$RPM_BUILD_ROOT/etc/systemd/system/pandora-agent.service <<'SVCEOF'
+          [Unit]
+          Description=Pandora Box Console Agent
+          After=network.target
+          
+          [Service]
+          Type=simple
+          User=root
+          WorkingDirectory=/opt/pandora-box/backend
+          ExecStart=/opt/pandora-box/backend/pandora-agent --config /opt/pandora-box/backend/configs/agent-config.yaml
+          Restart=on-failure
+          
+          [Install]
+          WantedBy=multi-user.target
+          SVCEOF
+          
+          %files
+          /opt/pandora-box/*
+          /etc/systemd/system/pandora-agent.service
+          
+          %post
+          systemctl daemon-reload
+          systemctl enable pandora-agent.service
+          
+          %changelog
+          * $(date "+%a %b %d %Y") Pandora Team <support@pandora-ids.com> - $VERSION-1
+          - Initial release
+          EOF
+          
+          # 構建 RPM（簡化版，實際需要完整的構建環境）
+          # rpmbuild -ba ~/rpmbuild/SPECS/${PACKAGE_NAME}.spec
+          
+          echo "RPM spec 檔案已創建於 ~/rpmbuild/SPECS/"
+      
+      - name: 上傳 Linux 套件
+        uses: actions/upload-artifact@v4
+        with:
+          name: linux-packages
+          path: |
+            dist/*.deb
+            ~/rpmbuild/RPMS/**/*.rpm
+          retention-days: 30
+
+  # 構建 OVA 虛擬機映像
+  build-ova-image:
+    name: 構建 OVA 虛擬機映像
+    needs: [prepare, build-backend, build-frontend]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout 程式碼
+        uses: actions/checkout@v4
+      
+      - name: 下載後端構建產物
+        uses: actions/download-artifact@v4
+        with:
+          name: backend-ubuntu-latest-amd64
+          path: vm/backend
+      
+      - name: 下載前端構建產物
+        uses: actions/download-artifact@v4
+        with:
+          name: frontend
+          path: vm/frontend
+      
+      - name: 安裝 Packer
+        run: |
+          curl -fsSL https://apt.releases.hashicorp.com/gpg | sudo apt-key add -
+          sudo apt-add-repository "deb [arch=amd64] https://apt.releases.hashicorp.com $(lsb_release -cs) main"
+          sudo apt-get update
+          sudo apt-get install -y packer
+      
+      - name: 創建 Packer 配置
+        run: |
+          cat > packer-config.pkr.hcl <<'EOF'
+          packer {
+            required_plugins {
+              virtualbox = {
+                version = ">= 1.0.0"
+                source  = "github.com/hashicorp/virtualbox"
+              }
+            }
+          }
+          
+          source "virtualbox-iso" "pandora-box" {
+            guest_os_type    = "Ubuntu_64"
+            iso_url          = "https://releases.ubuntu.com/22.04/ubuntu-22.04.3-live-server-amd64.iso"
+            iso_checksum     = "sha256:a4acfda10b18da50e2ec50ccaf860d7f20b389df8765611142305c0e911d16fd"
+            ssh_username     = "pandora"
+            ssh_password     = "pandora"
+            ssh_timeout      = "20m"
+            shutdown_command = "echo 'pandora' | sudo -S shutdown -P now"
+            format           = "ova"
+            output_directory = "dist"
+            vm_name          = "pandora-box-${{ needs.prepare.outputs.version }}"
+            
+            vboxmanage = [
+              ["modifyvm", "{{.Name}}", "--memory", "4096"],
+              ["modifyvm", "{{.Name}}", "--cpus", "2"],
+              ["modifyvm", "{{.Name}}", "--vram", "128"]
+            ]
+          }
+          
+          build {
+            sources = ["source.virtualbox-iso.pandora-box"]
+            
+            provisioner "shell" {
+              inline = [
+                "sudo apt-get update",
+                "sudo apt-get install -y postgresql redis-server nginx",
+                "sudo systemctl enable postgresql redis-server nginx"
+              ]
+            }
+            
+            provisioner "file" {
+              source      = "vm/backend"
+              destination = "/tmp/"
+            }
+            
+            provisioner "file" {
+              source      = "vm/frontend"
+              destination = "/tmp/"
+            }
+            
+            provisioner "shell" {
+              inline = [
+                "sudo mkdir -p /opt/pandora-box",
+                "sudo mv /tmp/backend /opt/pandora-box/",
+                "sudo mv /tmp/frontend /opt/pandora-box/",
+                "sudo chmod +x /opt/pandora-box/backend/*"
+              ]
+            }
+          }
+          EOF
+      
+      - name: 構建 OVA 映像
+        run: |
+          # 注意：在 GitHub Actions 上構建 OVA 需要嵌套虛擬化支援
+          # 這裡僅創建配置檔案，實際構建可能需要在本地或專用 CI 環境進行
+          echo "OVA 配置檔案已創建"
+          echo "實際構建需要在支援虛擬化的環境中執行：packer build packer-config.pkr.hcl"
+      
+      - name: 上傳 OVA 配置
+        uses: actions/upload-artifact@v4
+        with:
+          name: ova-config
+          path: packer-config.pkr.hcl
+          retention-days: 30
+
+  # 構建 ISO 光碟映像
+  build-iso-image:
+    name: 構建 ISO 安裝光碟
+    needs: [prepare, build-backend, build-frontend]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout 程式碼
+        uses: actions/checkout@v4
+      
+      - name: 下載所有構建產物
+        uses: actions/download-artifact@v4
+      
+      - name: 安裝 ISO 構建工具
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y genisoimage syslinux isolinux
+      
+      - name: 創建 ISO 檔案結構
+        run: |
+          VERSION="${{ needs.prepare.outputs.version }}"
+          ISO_DIR="iso"
+          
+          mkdir -p $ISO_DIR/{backend,frontend,configs,scripts}
+          mkdir -p $ISO_DIR/isolinux
+          
+          # 複製檔案
+          cp -r backend-ubuntu-latest-amd64/* $ISO_DIR/backend/ || true
+          cp -r frontend/* $ISO_DIR/frontend/ || true
+          cp -r configs $ISO_DIR/
+          
+          # 創建安裝腳本
+          cat > $ISO_DIR/install.sh <<'INSTALLEOF'
+          #!/bin/bash
+          set -e
+          
+          echo "======================================"
+          echo "  Pandora Box Console IDS-IPS 安裝程式  "
+          echo "======================================"
+          echo ""
+          
+          # 檢查權限
+          if [ "$EUID" -ne 0 ]; then
+            echo "請使用 root 權限執行此腳本"
+            exit 1
+          fi
+          
+          # 安裝目錄
+          INSTALL_DIR="/opt/pandora-box"
+          
+          echo "正在安裝到 $INSTALL_DIR..."
+          
+          # 創建目錄
+          mkdir -p $INSTALL_DIR/{backend,frontend,configs,logs}
+          
+          # 複製檔案
+          cp -r backend/* $INSTALL_DIR/backend/
+          cp -r frontend/* $INSTALL_DIR/frontend/
+          cp -r configs/* $INSTALL_DIR/configs/
+          
+          # 設定權限
+          chmod +x $INSTALL_DIR/backend/*
+          
+          # 安裝 systemd 服務
+          cat > /etc/systemd/system/pandora-agent.service <<'SVCEOF'
+          [Unit]
+          Description=Pandora Box Console Agent
+          After=network.target postgresql.service redis.service
+          
+          [Service]
+          Type=simple
+          User=root
+          WorkingDirectory=/opt/pandora-box/backend
+          ExecStart=/opt/pandora-box/backend/pandora-agent --config /opt/pandora-box/configs/agent-config.yaml
+          Restart=on-failure
+          RestartSec=10
+          StandardOutput=journal
+          StandardError=journal
+          
+          [Install]
+          WantedBy=multi-user.target
+          SVCEOF
+          
+          # 重新載入並啟用服務
+          systemctl daemon-reload
+          systemctl enable pandora-agent.service
+          
+          echo ""
+          echo "======================================"
+          echo "  安裝完成！"
+          echo "======================================"
+          echo ""
+          echo "使用以下命令啟動服務："
+          echo "  systemctl start pandora-agent"
+          echo ""
+          echo "查看服務狀態："
+          echo "  systemctl status pandora-agent"
+          echo ""
+          INSTALLEOF
+          
+          chmod +x $ISO_DIR/install.sh
+          
+          # 創建 README
+          cat > $ISO_DIR/README.txt <<EOF
+          Pandora Box Console IDS-IPS v$VERSION
+          ======================================
+          
+          安裝說明：
+          
+          1. 將光碟掛載到系統
+          2. 以 root 權限執行: ./install.sh
+          3. 啟動服務: systemctl start pandora-agent
+          
+          詳細文檔請參考: https://github.com/your-org/pandora_box_console_IDS-IPS
+          
+          技術支援: support@pandora-ids.com
+          EOF
+          
+          # 複製 isolinux 檔案
+          cp /usr/lib/ISOLINUX/isolinux.bin $ISO_DIR/isolinux/
+          cp /usr/lib/syslinux/modules/bios/ldlinux.c32 $ISO_DIR/isolinux/
+          
+          # 創建 isolinux 配置
+          cat > $ISO_DIR/isolinux/isolinux.cfg <<EOF
+          DEFAULT install
+          PROMPT 0
+          TIMEOUT 50
+          
+          LABEL install
+            MENU LABEL Install Pandora Box Console
+            KERNEL /install.sh
+          EOF
+      
+      - name: 構建 ISO 映像
+        run: |
+          VERSION="${{ needs.prepare.outputs.version }}"
+          mkdir -p dist
+          
+          # 創建簡短的 Volume ID（限制 32 字符）
+          VOLUME_ID="PandoraBox-${VERSION}"
+          if [[ ${#VOLUME_ID} -gt 32 ]]; then
+            VOLUME_ID="PandoraBox-v${VERSION:0:20}"
+          fi
+          
+          genisoimage \
+            -o dist/pandora-box-console-${VERSION}-amd64.iso \
+            -b isolinux/isolinux.bin \
+            -c isolinux/boot.cat \
+            -no-emul-boot \
+            -boot-load-size 4 \
+            -boot-info-table \
+            -J -R -V "${VOLUME_ID}" \
+            iso/
+          
+          # 創建 MD5 校驗和
+          cd dist
+          md5sum pandora-box-console-${VERSION}-amd64.iso > pandora-box-console-${VERSION}-amd64.iso.md5
+          cd ..
+      
+      - name: 上傳 ISO 映像
+        uses: actions/upload-artifact@v4
+        with:
+          name: iso-image
+          path: |
+            dist/*.iso
+            dist/*.md5
+          retention-days: 30
+
+  # 創建發布
+  create-release:
+    name: 創建 GitHub Release
+    needs: [prepare, build-windows-installer, build-linux-packages, build-iso-image]
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/v') || (github.ref == 'refs/heads/main' && github.event_name == 'push') || (github.ref == 'refs/heads/dev' && github.event_name == 'push')
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout 程式碼
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+      
+      - name: 下載所有構建產物
+        uses: actions/download-artifact@v4
+        with:
+          path: release-artifacts
+      
+      - name: 整理構建產物
+        run: |
+          # 列出下載的檔案結構
+          echo "Downloaded artifacts structure:"
+          ls -R release-artifacts/
+          
+          # 只複製實際的構建產物（安裝檔、套件、ISO 等）
+          mkdir -p release-files
+          
+          # 複製 Windows 安裝程式（.exe 安裝檔）
+          find release-artifacts -path "*/dist/*.exe" -type f -exec cp {} release-files/ \; 2>/dev/null || true
+          
+          # 複製 Linux 套件
+          find release-artifacts -name "*.deb" -type f -exec cp {} release-files/ \; 2>/dev/null || true
+          find release-artifacts -name "*.rpm" -type f -exec cp {} release-files/ \; 2>/dev/null || true
+          
+          # 複製 ISO 映像和相關檔案
+          find release-artifacts -name "*.iso" -type f -exec cp {} release-files/ \; 2>/dev/null || true
+          find release-artifacts -name "*.iso.md5" -type f -exec cp {} release-files/ \; 2>/dev/null || true
+          
+          # 複製 Packer 配置
+          find release-artifacts -name "*.hcl" -type f -exec cp {} release-files/ \; 2>/dev/null || true
+          
+          # 複製 OVA 檔案（如果有）
+          find release-artifacts -name "*.ova" -type f -exec cp {} release-files/ \; 2>/dev/null || true
+          
+          # 為 macOS 二進制檔案創建壓縮包
+          echo ""
+          echo "Creating macOS binary archives..."
+          
+          # macOS amd64
+          if [ -d "release-artifacts/backend-macos-latest-amd64" ]; then
+            cd release-artifacts/backend-macos-latest-amd64
+            tar -czf ../../release-files/pandora-box-console-${{ needs.prepare.outputs.version }}-darwin-amd64.tar.gz *
+            cd ../..
+            echo "Created darwin-amd64 archive"
+          fi
+          
+          # macOS arm64
+          if [ -d "release-artifacts/backend-macos-latest-arm64" ]; then
+            cd release-artifacts/backend-macos-latest-arm64
+            tar -czf ../../release-files/pandora-box-console-${{ needs.prepare.outputs.version }}-darwin-arm64.tar.gz *
+            cd ../..
+            echo "Created darwin-arm64 archive"
+          fi
+          
+          echo ""
+          echo "Files to upload:"
+          ls -lh release-files/
+          echo ""
+          echo "Total files: $(ls -1 release-files/ | wc -l)"
+      
+      - name: 為分支創建 tag
+        if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/dev'
+        run: |
+          if [[ "${{ github.ref }}" == "refs/heads/main" ]]; then
+            TAG_NAME="v${{ needs.prepare.outputs.version }}"
+          else
+            TAG_NAME="dev-${{ needs.prepare.outputs.version }}"
+          fi
+          
+          git config --local user.email "action@github.com"
+          git config --local user.name "GitHub Action"
+          
+          # 檢查 tag 是否已存在
+          if git rev-parse "$TAG_NAME" >/dev/null 2>&1; then
+            echo "Tag $TAG_NAME already exists, deleting it first"
+            git tag -d "$TAG_NAME"
+            git push origin ":refs/tags/$TAG_NAME" || true
+          fi
+          
+          git tag -a "$TAG_NAME" -m "Release ${{ needs.prepare.outputs.version }} from ${{ github.ref_name }}"
+          git push origin "$TAG_NAME"
+          
+          # 等待 tag 同步
+          echo "Waiting for tag to be available..."
+          sleep 5
+      
+      - name: 創建 Release
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: ${{ github.ref == 'refs/heads/main' && format('v{0}', needs.prepare.outputs.version) || (github.ref == 'refs/heads/dev' && format('dev-{0}', needs.prepare.outputs.version)) || github.ref_name }}
+          name: Pandora Box Console v${{ needs.prepare.outputs.version }}${{ github.ref == 'refs/heads/dev' && '-dev' || '' }}
+          body: |
+            ## 🎉 Pandora Box Console IDS-IPS v${{ needs.prepare.outputs.version }}${{ github.ref == 'refs/heads/dev' && ' (Development)' || '' }}
+            
+            ### 📦 安裝檔案
+            
+            #### Windows
+            - `pandora-box-console-*-windows-amd64-setup.exe` - Windows 安裝程式
+            
+            #### Linux
+            - `pandora-box-console-*_amd64.deb` - Debian/Ubuntu 套件
+            - `pandora-box-console-*.rpm` - RedHat/CentOS 套件
+            
+            #### macOS
+            - `pandora-box-console-*-darwin-amd64.tar.gz` - macOS Intel (x86_64) 二進制檔案
+            - `pandora-box-console-*-darwin-arm64.tar.gz` - macOS Apple Silicon (ARM64) 二進制檔案
+            
+            #### 虛擬機/光碟
+            - `pandora-box-console-*-amd64.iso` - ISO 安裝光碟
+            - `packer-config.pkr.hcl` - OVA 虛擬機配置
+            
+            ### 📝 更新日誌
+            
+            請參考 [CHANGELOG.md](CHANGELOG.md)
+            
+            ### 🔧 系統需求
+            
+            - **CPU**: 2 核心以上
+            - **記憶體**: 4GB 以上
+            - **儲存空間**: 20GB 以上
+            - **作業系統**: 
+              - Windows 10/11 或 Windows Server 2019/2022
+              - Ubuntu 20.04/22.04 或 Debian 11/12
+              - RHEL/CentOS 8/9
+            
+            ### 📚 文檔
+            
+            - [安裝指南](README.md#快速開始)
+            - [設定說明](README.md#設定說明)
+            - [故障排除](README.md#故障排除)
+            
+            ---
+            
+            **構建資訊**
+            - 版本: ${{ needs.prepare.outputs.version }}
+            - 構建日期: ${{ needs.prepare.outputs.build_date }}
+            - Git Commit: ${{ needs.prepare.outputs.git_commit }}
+          files: release-files/*
+          draft: false
+          prerelease: ${{ github.ref == 'refs/heads/dev' }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+

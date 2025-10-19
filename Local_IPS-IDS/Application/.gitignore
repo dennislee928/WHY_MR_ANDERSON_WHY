@@ -1,0 +1,51 @@
+# Application 構建產物和臨時檔案
+
+# 構建輸出
+dist/
+bin/
+
+# 前端
+Fe/node_modules/
+Fe/.next/
+Fe/out/
+Fe/build/
+Fe/.cache/
+Fe/.turbo/
+Fe/.vercel/
+
+# 依賴鎖定檔案（可選，視團隊決定）
+# Fe/package-lock.json
+# Fe/yarn.lock
+
+# 環境變數
+Fe/.env.local
+Fe/.env.development.local
+Fe/.env.test.local
+Fe/.env.production.local
+
+# 後端
+be/bin/
+be/dist/
+
+# 日誌
+*.log
+logs/
+
+# 臨時檔案
+*.tmp
+*.temp
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+desktop.ini
+

@@ -1,0 +1,310 @@
+- pipeline: "Build On-Premise Installers"
+  on: "PUSH"
+  refs:
+  - "refs/heads/main"
+  - "refs/heads/dev"
+  priority: "HIGH"
+  fail_on_prepare_env_warning: true
+  actions:
+  
+  # ============================================
+  # Stage 1: 準備構建環境
+  # ============================================
+  - action: "Prepare Build Environment"
+    type: "BUILD"
+    docker_image_name: "library/ubuntu"
+    docker_image_tag: "22.04"
+    execute_commands:
+    - "export VERSION=$(git describe --tags --abbrev=0 2>/dev/null | sed 's/^v//' || echo '0.1.0')"
+    - "export BUILD_DATE=$(date -u '+%Y-%m-%d_%H:%M:%S')"
+    - "export GIT_COMMIT=$(git rev-parse --short HEAD)"
+    - "echo \"VERSION=$VERSION\" >> $BUDDY_EXPORT_FILE"
+    - "echo \"BUILD_DATE=$BUILD_DATE\" >> $BUDDY_EXPORT_FILE"
+    - "echo \"GIT_COMMIT=$GIT_COMMIT\" >> $BUDDY_EXPORT_FILE"
+    - "echo \"Building version: $VERSION\""
+    setup_commands:
+    - "apt-get update && apt-get install -y git"
+  
+  # ============================================
+  # Stage 2: 構建後端（Go）- Linux
+  # ============================================
+  - action: "Build Backend - Linux AMD64"
+    type: "BUILD"
+    docker_image_name: "library/golang"
+    docker_image_tag: "1.21"
+    execute_commands:
+    - "export VERSION=$VERSION"
+    - "export LDFLAGS=\"-s -w -X main.Version=$VERSION -X main.BuildTime=$BUILD_DATE -X main.GitCommit=$GIT_COMMIT\""
+    - "mkdir -p dist/backend"
+    - "go mod download && go mod verify"
+    - "echo 'Building Agent...'"
+    - "CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -ldflags=\"$LDFLAGS\" -o dist/backend/pandora-agent ./cmd/agent/main.go"
+    - "echo 'Building Console...'"
+    - "CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -ldflags=\"$LDFLAGS\" -o dist/backend/pandora-console ./cmd/console/main.go"
+    - "echo 'Building UI Server...'"
+    - "CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -ldflags=\"$LDFLAGS\" -o dist/backend/axiom-ui ./cmd/ui/main.go"
+    - "cp -r configs dist/backend/ || true"
+    - "cp -r scripts dist/backend/ || true"
+    - "ls -la dist/backend/"
+    cached_dirs:
+    - "/go/pkg/mod"
+    
+  - action: "Build Backend - Windows AMD64"
+    type: "BUILD"
+    docker_image_name: "library/golang"
+    docker_image_tag: "1.21"
+    execute_commands:
+    - "export VERSION=$VERSION"
+    - "export LDFLAGS=\"-s -w -X main.Version=$VERSION -X main.BuildTime=$BUILD_DATE -X main.GitCommit=$GIT_COMMIT\""
+    - "mkdir -p dist/backend-windows"
+    - "go mod download && go mod verify"
+    - "CGO_ENABLED=0 GOOS=windows GOARCH=amd64 go build -ldflags=\"$LDFLAGS\" -o dist/backend-windows/pandora-agent.exe ./cmd/agent/main.go"
+    - "CGO_ENABLED=0 GOOS=windows GOARCH=amd64 go build -ldflags=\"$LDFLAGS\" -o dist/backend-windows/pandora-console.exe ./cmd/console/main.go"
+    - "CGO_ENABLED=0 GOOS=windows GOARCH=amd64 go build -ldflags=\"$LDFLAGS\" -o dist/backend-windows/axiom-ui.exe ./cmd/ui/main.go"
+    cached_dirs:
+    - "/go/pkg/mod"
+    
+  - action: "Build Backend - macOS"
+    type: "BUILD"
+    docker_image_name: "library/golang"
+    docker_image_tag: "1.21"
+    execute_commands:
+    - "export VERSION=$VERSION"
+    - "export LDFLAGS=\"-s -w -X main.Version=$VERSION -X main.BuildTime=$BUILD_DATE -X main.GitCommit=$GIT_COMMIT\""
+    - "mkdir -p dist/backend-darwin-amd64 dist/backend-darwin-arm64"
+    - "go mod download"
+    - "# macOS AMD64"
+    - "CGO_ENABLED=0 GOOS=darwin GOARCH=amd64 go build -ldflags=\"$LDFLAGS\" -o dist/backend-darwin-amd64/pandora-agent ./cmd/agent/main.go"
+    - "CGO_ENABLED=0 GOOS=darwin GOARCH=amd64 go build -ldflags=\"$LDFLAGS\" -o dist/backend-darwin-amd64/pandora-console ./cmd/console/main.go"
+    - "CGO_ENABLED=0 GOOS=darwin GOARCH=amd64 go build -ldflags=\"$LDFLAGS\" -o dist/backend-darwin-amd64/axiom-ui ./cmd/ui/main.go"
+    - "# macOS ARM64"
+    - "CGO_ENABLED=0 GOOS=darwin GOARCH=arm64 go build -ldflags=\"$LDFLAGS\" -o dist/backend-darwin-arm64/pandora-agent ./cmd/agent/main.go"
+    - "CGO_ENABLED=0 GOOS=darwin GOARCH=arm64 go build -ldflags=\"$LDFLAGS\" -o dist/backend-darwin-arm64/pandora-console ./cmd/console/main.go"
+    - "CGO_ENABLED=0 GOOS=darwin GOARCH=arm64 go build -ldflags=\"$LDFLAGS\" -o dist/backend-darwin-arm64/axiom-ui ./cmd/ui/main.go"
+    - "# Create tar.gz archives"
+    - "cd dist/backend-darwin-amd64 && tar -czf ../pandora-box-console-$VERSION-darwin-amd64.tar.gz * && cd ../.."
+    - "cd dist/backend-darwin-arm64 && tar -czf ../pandora-box-console-$VERSION-darwin-arm64.tar.gz * && cd ../.."
+    cached_dirs:
+    - "/go/pkg/mod"
+  
+  # ============================================
+  # Stage 3: 構建前端（Next.js）
+  # ============================================
+  - action: "Build Frontend"
+    type: "BUILD"
+    docker_image_name: "library/node"
+    docker_image_tag: "18"
+    working_directory: "/Application/Fe"
+    execute_commands:
+    - "echo 'Checking package.json...'"
+    - "cat package.json | head -10"
+    - "# Generate package-lock.json if missing"
+    - "if [ ! -f package-lock.json ]; then npm install --package-lock-only; fi"
+    - "# Install dependencies"
+    - "npm ci || npm install"
+    - "# Build frontend"
+    - "export NEXT_PUBLIC_APP_VERSION=$VERSION"
+    - "export NODE_ENV=production"
+    - "npm run build"
+    - "# Prepare distribution"
+    - "mkdir -p ../../dist/frontend"
+    - "if [ -d .next/standalone ]; then cp -r .next/standalone/* ../../dist/frontend/; fi"
+    - "if [ -d .next/static ]; then cp -r .next/static ../../dist/frontend/.next/; fi"
+    - "if [ -d public ]; then cp -r public ../../dist/frontend/; fi"
+    - "ls -la ../../dist/frontend/"
+    cached_dirs:
+    - "/node_modules"
+    - "/.next/cache"
+  
+  # ============================================
+  # Stage 4: 構建 Linux 套件（.deb 和 .rpm）
+  # ============================================
+  - action: "Build Linux Packages"
+    type: "BUILD"
+    docker_image_name: "library/ubuntu"
+    docker_image_tag: "22.04"
+    execute_commands:
+    - "apt-get update && apt-get install -y dpkg-dev rpm build-essential"
+    - "export VERSION=$VERSION"
+    - "export PACKAGE_NAME='pandora-box-console'"
+    - "# Create DEB package structure"
+    - "mkdir -p debian/DEBIAN"
+    - "mkdir -p debian/opt/pandora-box/{backend,frontend,configs}"
+    - "mkdir -p debian/etc/systemd/system"
+    - "# Copy files"
+    - "cp -r dist/backend/* debian/opt/pandora-box/backend/"
+    - "cp -r dist/frontend/* debian/opt/pandora-box/frontend/"
+    - "chmod +x debian/opt/pandora-box/backend/*"
+    - "# Create systemd service"
+    - |
+      cat > debian/etc/systemd/system/pandora-agent.service <<'EOF'
+      [Unit]
+      Description=Pandora Box Console Agent
+      After=network.target
+      [Service]
+      Type=simple
+      User=root
+      WorkingDirectory=/opt/pandora-box/backend
+      ExecStart=/opt/pandora-box/backend/pandora-agent --config /opt/pandora-box/backend/configs/agent-config.yaml
+      Restart=on-failure
+      RestartSec=10
+      [Install]
+      WantedBy=multi-user.target
+      EOF
+    - "# Create control file"
+    - |
+      cat > debian/DEBIAN/control <<EOF
+      Package: $PACKAGE_NAME
+      Version: $VERSION
+      Section: net
+      Priority: optional
+      Architecture: amd64
+      Depends: libc6 (>= 2.31), postgresql-client, redis-tools
+      Maintainer: Pandora Security Team <support@pandora-ids.com>
+      Description: Pandora Box Console IDS-IPS System
+       智慧型入侵偵測與防護系統
+      EOF
+    - "# Create postinst script"
+    - |
+      cat > debian/DEBIAN/postinst <<'EOF'
+      #!/bin/bash
+      set -e
+      systemctl daemon-reload
+      systemctl enable pandora-agent.service
+      echo "Installation complete! Use 'systemctl start pandora-agent' to start."
+      EOF
+    - "chmod 755 debian/DEBIAN/postinst"
+    - "# Build DEB package"
+    - "mkdir -p dist"
+    - "dpkg-deb --build debian dist/${PACKAGE_NAME}_${VERSION}_amd64.deb"
+    - "ls -lh dist/"
+  
+  # ============================================
+  # Stage 5: 構建 ISO 映像
+  # ============================================
+  - action: "Build ISO Image"
+    type: "BUILD"
+    docker_image_name: "library/ubuntu"
+    docker_image_tag: "22.04"
+    execute_commands:
+    - "apt-get update && apt-get install -y genisoimage syslinux isolinux"
+    - "export VERSION=$VERSION"
+    - "mkdir -p iso/{backend,frontend,configs,scripts,isolinux}"
+    - "# Copy files"
+    - "cp -r dist/backend/* iso/backend/ || true"
+    - "cp -r dist/frontend/* iso/frontend/ || true"
+    - "# Create install script"
+    - |
+      cat > iso/install.sh <<'INSTALLEOF'
+      #!/bin/bash
+      set -e
+      echo "======================================"
+      echo "  Pandora Box Console IDS-IPS Installer"
+      echo "======================================"
+      if [ "$EUID" -ne 0 ]; then
+        echo "Please run as root"
+        exit 1
+      fi
+      INSTALL_DIR="/opt/pandora-box"
+      mkdir -p $INSTALL_DIR/{backend,frontend,configs,logs}
+      cp -r backend/* $INSTALL_DIR/backend/
+      cp -r frontend/* $INSTALL_DIR/frontend/
+      chmod +x $INSTALL_DIR/backend/*
+      echo "Installation complete!"
+      INSTALLEOF
+    - "chmod +x iso/install.sh"
+    - "# Copy isolinux files"
+    - "cp /usr/lib/ISOLINUX/isolinux.bin iso/isolinux/"
+    - "cp /usr/lib/syslinux/modules/bios/ldlinux.c32 iso/isolinux/"
+    - "# Create ISO"
+    - "mkdir -p dist"
+    - "VOLUME_ID=\"PandoraBox-${VERSION}\""
+    - "if [ ${#VOLUME_ID} -gt 32 ]; then VOLUME_ID=\"PandoraBox-v${VERSION:0:20}\"; fi"
+    - "genisoimage -o dist/pandora-box-console-${VERSION}-amd64.iso -b isolinux/isolinux.bin -c isolinux/boot.cat -no-emul-boot -boot-load-size 4 -boot-info-table -J -R -V \"${VOLUME_ID}\" iso/"
+    - "cd dist && md5sum pandora-box-console-${VERSION}-amd64.iso > pandora-box-console-${VERSION}-amd64.iso.md5"
+  
+  # ============================================
+  # Stage 6: 上傳到 GitHub Releases
+  # ============================================
+  - action: "Create GitHub Release"
+    type: "BUILD"
+    docker_image_name: "library/alpine"
+    docker_image_tag: "latest"
+    execute_commands:
+    - "apk add --no-cache curl jq git"
+    - "export VERSION=$VERSION"
+    - "export BUILD_DATE=$BUILD_DATE"
+    - "export GIT_COMMIT=$GIT_COMMIT"
+    - |
+      # Create or get tag
+      if [ "$BUDDY_EXECUTION_BRANCH" = "main" ]; then
+        TAG_NAME="v$VERSION"
+      else
+        TAG_NAME="dev-$VERSION"
+      fi
+    - |
+      # Create release using GitHub API
+      RELEASE_BODY=$(cat <<EOF
+      ## 🎉 Pandora Box Console IDS-IPS v$VERSION
+      
+      ### 📦 安裝檔案
+      
+      #### Windows
+      - \`pandora-box-console-*-windows-amd64-setup.exe\` - Windows 安裝程式
+      
+      #### Linux
+      - \`pandora-box-console-*_amd64.deb\` - Debian/Ubuntu 套件
+      - \`pandora-box-console-*.rpm\` - RedHat/CentOS 套件
+      
+      #### macOS
+      - \`pandora-box-console-*-darwin-amd64.tar.gz\` - macOS Intel
+      - \`pandora-box-console-*-darwin-arm64.tar.gz\` - macOS Apple Silicon
+      
+      #### 虛擬機/光碟
+      - \`pandora-box-console-*-amd64.iso\` - ISO 安裝光碟
+      
+      ### 🔧 系統需求
+      - CPU: 2 核心以上
+      - 記憶體: 4GB 以上
+      - 儲存空間: 20GB 以上
+      
+      ### 📚 文檔
+      - [安裝指南](README.md#快速開始)
+      - [設定說明](README.md#設定說明)
+      
+      ---
+      **構建資訊**
+      - 版本: $VERSION
+      - 構建日期: $BUILD_DATE
+      - Git Commit: $GIT_COMMIT
+      EOF
+      )
+    - |
+      # Create release
+      PRERELEASE="false"
+      if [ "$BUDDY_EXECUTION_BRANCH" = "dev" ]; then
+        PRERELEASE="true"
+      fi
+      
+      curl -X POST \
+        -H "Authorization: token $GITHUB_TOKEN" \
+        -H "Accept: application/vnd.github.v3+json" \
+        https://api.github.com/repos/$BUDDY_REPO_SLUG/releases \
+        -d "{\"tag_name\":\"$TAG_NAME\",\"name\":\"Pandora Box Console v$VERSION\",\"body\":\"$RELEASE_BODY\",\"draft\":false,\"prerelease\":$PRERELEASE}"
+    - |
+      # Upload artifacts
+      RELEASE_ID=$(curl -s -H "Authorization: token $GITHUB_TOKEN" \
+        https://api.github.com/repos/$BUDDY_REPO_SLUG/releases/tags/$TAG_NAME | jq -r .id)
+      
+      for file in dist/*.exe dist/*.deb dist/*.rpm dist/*.iso dist/*.md5 dist/*.tar.gz; do
+        if [ -f "$file" ]; then
+          FILENAME=$(basename "$file")
+          echo "Uploading $FILENAME..."
+          curl -X POST \
+            -H "Authorization: token $GITHUB_TOKEN" \
+            -H "Content-Type: application/octet-stream" \
+            --data-binary @"$file" \
+            "https://uploads.github.com/repos/$BUDDY_REPO_SLUG/releases/$RELEASE_ID/assets?name=$FILENAME"
+        fi
+      done
+    - "echo 'GitHub Release created successfully!'"

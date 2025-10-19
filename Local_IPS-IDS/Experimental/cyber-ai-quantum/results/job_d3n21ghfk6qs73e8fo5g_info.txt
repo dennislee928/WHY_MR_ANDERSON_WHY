@@ -1,0 +1,23 @@
+IBM Quantum Job Information
+======================================================================
+
+Circuit Name: superposition
+Job ID: d3n21ghfk6qs73e8fo5g
+Backend: ibm_torino
+Submitted: 2025-10-14 18:07:31.292304
+Status: QUEUED
+Shots: 1024
+
+Original QASM:
+----------------------------------------------------------------------
+OPENQASM 2.0;
+include "qelib1.inc";
+qreg q[3];
+creg c[3];
+h q[0];
+h q[1];
+h q[2];
+measure q[0] -> c[0];
+measure q[1] -> c[1];
+measure q[2] -> c[2];
+----------------------------------------------------------------------

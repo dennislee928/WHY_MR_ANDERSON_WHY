@@ -1,0 +1,153 @@
+syntax = "proto3";
+
+package pandora.device;
+
+option go_package = "pandora_box_console_ids_ips/api/proto/device";
+
+import "google/protobuf/timestamp.proto";
+import "google/protobuf/empty.proto";
+
+// DeviceService manages USB-SERIAL CH340 devices
+// 設備服務：管理 USB-SERIAL CH340 設備
+service DeviceService {
+  // Connect establishes a connection to a device
+  // 連接到設備
+  rpc Connect(ConnectRequest) returns (ConnectResponse);
+
+  // Disconnect closes the connection to a device
+  // 斷開設備連接
+  rpc Disconnect(DisconnectRequest) returns (DisconnectResponse);
+
+  // ReadData reads data from the device (streaming)
+  // 讀取設備數據（串流）
+  rpc ReadData(ReadDataRequest) returns (stream DataResponse);
+
+  // WriteData writes data to the device
+  // 寫入數據到設備
+  rpc WriteData(WriteDataRequest) returns (WriteDataResponse);
+
+  // GetStatus gets the current status of a device
+  // 獲取設備狀態
+  rpc GetStatus(StatusRequest) returns (StatusResponse);
+
+  // ListDevices lists all available devices
+  // 列出所有可用設備
+  rpc ListDevices(ListDevicesRequest) returns (ListDevicesResponse);
+
+  // GetHealth checks the health of the service
+  // 健康檢查
+  rpc GetHealth(google.protobuf.Empty) returns (HealthResponse);
+}
+
+// ConnectRequest contains parameters for connecting to a device
+message ConnectRequest {
+  string device_id = 1;
+  string port = 2;          // e.g., "/dev/ttyUSB0"
+  int32 baud_rate = 3;      // e.g., 115200
+  int32 timeout_seconds = 4; // e.g., 30
+}
+
+message ConnectResponse {
+  bool success = 1;
+  string message = 2;
+  DeviceInfo device = 3;
+}
+
+// DisconnectRequest contains parameters for disconnecting from a device
+message DisconnectRequest {
+  string device_id = 1;
+}
+
+message DisconnectResponse {
+  bool success = 1;
+  string message = 2;
+}
+
+// ReadDataRequest contains parameters for reading data
+message ReadDataRequest {
+  string device_id = 1;
+  int32 buffer_size = 2;    // bytes to read
+  int32 timeout_ms = 3;     // timeout in milliseconds
+}
+
+message DataResponse {
+  string device_id = 1;
+  bytes data = 2;
+  google.protobuf.Timestamp timestamp = 3;
+  int32 bytes_read = 4;
+}
+
+// WriteDataRequest contains data to write to the device
+message WriteDataRequest {
+  string device_id = 1;
+  bytes data = 2;
+}
+
+message WriteDataResponse {
+  bool success = 1;
+  int32 bytes_written = 2;
+  string message = 3;
+}
+
+// StatusRequest requests the status of a device
+message StatusRequest {
+  string device_id = 1;
+}
+
+message StatusResponse {
+  string device_id = 1;
+  DeviceStatus status = 2;
+  DeviceInfo info = 3;
+  DeviceMetrics metrics = 4;
+}
+
+// ListDevicesRequest requests a list of all devices
+message ListDevicesRequest {
+  bool include_disconnected = 1;
+}
+
+message ListDevicesResponse {
+  repeated DeviceInfo devices = 1;
+  int32 total_count = 2;
+}
+
+// HealthResponse contains health information
+message HealthResponse {
+  bool healthy = 1;
+  string status = 2;
+  string version = 3;
+  int64 uptime_seconds = 4;
+  map<string, string> dependencies = 5;
+}
+
+// DeviceInfo contains information about a device
+message DeviceInfo {
+  string device_id = 1;
+  string device_type = 2;   // e.g., "usb-serial"
+  string device_name = 3;   // e.g., "CH340 Serial"
+  string port = 4;          // e.g., "/dev/ttyUSB0"
+  string vendor = 5;
+  string product = 6;
+  string serial_number = 7;
+  google.protobuf.Timestamp connected_at = 8;
+}
+
+// DeviceStatus represents the status of a device
+enum DeviceStatus {
+  DEVICE_STATUS_UNKNOWN = 0;
+  DEVICE_STATUS_CONNECTED = 1;
+  DEVICE_STATUS_DISCONNECTED = 2;
+  DEVICE_STATUS_ERROR = 3;
+  DEVICE_STATUS_BUSY = 4;
+}
+
+// DeviceMetrics contains device metrics
+message DeviceMetrics {
+  int64 bytes_read = 1;
+  int64 bytes_written = 2;
+  int64 read_operations = 3;
+  int64 write_operations = 4;
+  int64 errors = 5;
+  double uptime_seconds = 6;
+}
+

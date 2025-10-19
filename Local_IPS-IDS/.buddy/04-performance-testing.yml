@@ -1,0 +1,53 @@
+- pipeline: "Performance Testing"
+  on: "CLICK"
+  priority: "NORMAL"
+  trigger_time: "MANUAL"
+  actions:
+  
+  # ============================================
+  # Stage 1: 負載測試（k6）
+  # ============================================
+  - action: "Load Testing with k6"
+    type: "BUILD"
+    docker_image_name: "grafana/k6"
+    docker_image_tag: "latest"
+    execute_commands:
+    - "# Create k6 test script"
+    - |
+      cat > load_test.js <<'EOF'
+      import http from 'k6/http';
+      import { check, sleep } from 'k6';
+      export let options = {
+        stages: [
+          { duration: '2m', target: 100 },
+          { duration: '5m', target: 10000 },
+          { duration: '2m', target: 0 },
+        ],
+        thresholds: {
+          http_req_duration: ['p(99)<10'],
+          http_req_failed: ['rate<0.01'],
+        },
+      };
+      export default function () {
+        let res = http.get('http://localhost:8081/health');
+        check(res, { 'status is 200': (r) => r.status === 200 });
+        sleep(0.01);
+      }
+      EOF
+    - "# Run load test"
+    - "k6 run load_test.js --out json=load_test_results.json"
+    - "# Generate report"
+    - "echo 'Load test completed. Check load_test_results.json for details.'"
+  
+  # ============================================
+  # Stage 2: 基準測試（Go Benchmark）
+  # ============================================
+  - action: "Go Benchmark Tests"
+    type: "BUILD"
+    docker_image_name: "library/golang"
+    docker_image_tag: "1.21"
+    execute_commands:
+    - "go test -bench=. -benchmem ./tests/performance/ > benchmark_results.txt"
+    - "cat benchmark_results.txt"
+    cached_dirs:
+    - "/go/pkg/mod"
