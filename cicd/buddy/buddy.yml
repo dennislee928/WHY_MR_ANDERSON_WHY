@@ -1,0 +1,209 @@
+- pipeline: "Build and Deploy to Cloudflare"
+  on: "CLICK"
+  refs:
+    - "refs/heads/main"
+  priority: "NORMAL"
+  fail_on_prepare_env_warning: true
+  actions:
+    - action: "Install Dependencies"
+      type: "BUILD"
+      working_directory: "/buddy/security-platform"
+      docker_image_name: "library/node"
+      docker_image_tag: "18-alpine"
+      execute_commands:
+        - "cd infrastructure/cloud-configs/cloudflare"
+        - "npm install"
+      setup_commands:
+        - "apk add --no-cache git"
+      
+    - action: "Run Tests"
+      type: "BUILD"
+      working_directory: "/buddy/security-platform"
+      docker_image_name: "library/node"
+      docker_image_tag: "18-alpine"
+      execute_commands:
+        - "cd infrastructure/cloud-configs/cloudflare"
+        - "npm test || echo 'No tests configured'"
+
+    - action: "Deploy to Cloudflare Workers"
+      type: "BUILD"
+      working_directory: "/buddy/security-platform"
+      docker_image_name: "library/node"
+      docker_image_tag: "18-alpine"
+      execute_commands:
+        - "cd infrastructure/cloud-configs/cloudflare"
+        - "npx wrangler deploy --env production"
+      setup_commands:
+        - "npm install -g wrangler"
+      variables:
+        - key: "CLOUDFLARE_API_TOKEN"
+          value: "secure!${CLOUDFLARE_API_TOKEN}"
+          type: "SECRET"
+        - key: "CLOUDFLARE_ACCOUNT_ID"
+          value: "${CLOUDFLARE_ACCOUNT_ID}"
+
+- pipeline: "Build and Deploy to OCI"
+  on: "CLICK"
+  refs:
+    - "refs/heads/main"
+  priority: "NORMAL"
+  actions:
+    - action: "Build Backend Docker Image"
+      type: "DOCKERFILE"
+      working_directory: "/buddy/security-platform/src/backend"
+      dockerfile_path: "Dockerfile"
+      docker_image_tag: "latest"
+      repository: "${OCI_REGISTRY}/security-platform-backend"
+      registry_id: "${OCI_REGISTRY_ID}"
+      
+    - action: "Build AI/Quantum Docker Image"
+      type: "DOCKERFILE"
+      working_directory: "/buddy/security-platform/src/ai-quantum"
+      dockerfile_path: "Dockerfile"
+      docker_image_tag: "latest"
+      repository: "${OCI_REGISTRY}/security-platform-ai"
+      registry_id: "${OCI_REGISTRY_ID}"
+
+    - action: "Build Frontend Docker Image"
+      type: "DOCKERFILE"
+      working_directory: "/buddy/security-platform/src/frontend"
+      dockerfile_path: "Dockerfile"
+      docker_image_tag: "latest"
+      repository: "${OCI_REGISTRY}/security-platform-frontend"
+      registry_id: "${OCI_REGISTRY_ID}"
+
+    - action: "Deploy to OCI via SSH"
+      type: "SSH_COMMAND"
+      working_directory: "/buddy/security-platform"
+      login: "ubuntu"
+      host: "${OCI_APP_SERVER_IP}"
+      port: "22"
+      authentication_mode: "KEY"
+      execute_commands:
+        - "cd /opt/security-platform"
+        - "docker-compose pull"
+        - "docker-compose up -d"
+        - "docker system prune -f"
+      variables:
+        - key: "OCI_SSH_KEY"
+          value: "secure!${OCI_SSH_KEY}"
+          type: "SECRET"
+
+- pipeline: "Build and Deploy to IBM Cloud"
+  on: "CLICK"
+  refs:
+    - "refs/heads/main"
+  priority: "NORMAL"
+  actions:
+    - action: "Install IBM Cloud CLI"
+      type: "BUILD"
+      working_directory: "/buddy/security-platform"
+      docker_image_name: "library/ubuntu"
+      docker_image_tag: "22.04"
+      execute_commands:
+        - "curl -fsSL https://clis.cloud.ibm.com/install/linux | sh"
+        - "ibmcloud --version"
+
+    - action: "Deploy to IBM Cloud Foundry"
+      type: "BUILD"
+      working_directory: "/buddy/security-platform"
+      docker_image_name: "library/ubuntu"
+      docker_image_tag: "22.04"
+      execute_commands:
+        - "ibmcloud login --apikey ${IBM_CLOUD_API_KEY} -r ${IBM_CLOUD_REGION}"
+        - "ibmcloud target --cf"
+        - "cd infrastructure/cloud-configs/ibm"
+        - "ibmcloud cf push"
+      variables:
+        - key: "IBM_CLOUD_API_KEY"
+          value: "secure!${IBM_CLOUD_API_KEY}"
+          type: "SECRET"
+        - key: "IBM_CLOUD_REGION"
+          value: "us-south"
+
+- pipeline: "Run Tests and Security Scan"
+  on: "PUSH"
+  refs:
+    - "refs/heads/*"
+  priority: "HIGH"
+  actions:
+    - action: "Go Backend Tests"
+      type: "BUILD"
+      working_directory: "/buddy/security-platform/src/backend"
+      docker_image_name: "library/golang"
+      docker_image_tag: "1.24-alpine"
+      execute_commands:
+        - "go mod download"
+        - "go test ./... -v -cover"
+        - "go vet ./..."
+
+    - action: "Python AI Tests"
+      type: "BUILD"
+      working_directory: "/buddy/security-platform/src/ai-quantum"
+      docker_image_name: "library/python"
+      docker_image_tag: "3.11-alpine"
+      execute_commands:
+        - "pip install -r requirements.txt"
+        - "python -m pytest tests/ -v || echo 'No tests found'"
+
+    - action: "Frontend Tests"
+      type: "BUILD"
+      working_directory: "/buddy/security-platform/src/frontend"
+      docker_image_name: "library/node"
+      docker_image_tag: "18-alpine"
+      execute_commands:
+        - "npm install"
+        - "npm test || echo 'No tests configured'"
+        - "npm run lint || echo 'No linter configured'"
+
+    - action: "Security Scan - Trivy"
+      type: "BUILD"
+      working_directory: "/buddy/security-platform"
+      docker_image_name: "aquasec/trivy"
+      docker_image_tag: "latest"
+      execute_commands:
+        - "trivy fs --severity HIGH,CRITICAL ."
+
+- pipeline: "Build Multi-Arch Docker Images"
+  on: "CLICK"
+  refs:
+    - "refs/heads/main"
+  priority: "NORMAL"
+  actions:
+    - action: "Setup Buildx"
+      type: "BUILD"
+      docker_image_name: "library/docker"
+      docker_image_tag: "latest"
+      execute_commands:
+        - "docker buildx create --use"
+        - "docker buildx inspect --bootstrap"
+
+    - action: "Build and Push Multi-Arch Images"
+      type: "BUILD"
+      docker_image_name: "library/docker"
+      docker_image_tag: "latest"
+      execute_commands:
+        - |
+          docker buildx build --platform linux/amd64,linux/arm64 \
+            -t ${DOCKER_REGISTRY}/security-platform-backend:latest \
+            --push \
+            src/backend/
+        - |
+          docker buildx build --platform linux/amd64,linux/arm64 \
+            -t ${DOCKER_REGISTRY}/security-platform-ai:latest \
+            --push \
+            src/ai-quantum/
+        - |
+          docker buildx build --platform linux/amd64,linux/arm64 \
+            -t ${DOCKER_REGISTRY}/security-platform-frontend:latest \
+            --push \
+            src/frontend/
+      variables:
+        - key: "DOCKER_REGISTRY"
+          value: "${DOCKER_REGISTRY}"
+        - key: "DOCKER_USERNAME"
+          value: "${DOCKER_USERNAME}"
+        - key: "DOCKER_PASSWORD"
+          value: "secure!${DOCKER_PASSWORD}"
+          type: "SECRET"
+

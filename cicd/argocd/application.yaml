@@ -1,0 +1,102 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: security-platform
+  namespace: argocd
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: default
+  
+  source:
+    repoURL: https://github.com/your-org/security-platform.git
+    targetRevision: main
+    path: infrastructure/kubernetes
+    
+    # Kustomize configuration
+    kustomize:
+      namePrefix: prod-
+      commonLabels:
+        app: security-platform
+        environment: production
+      images:
+        - name: security-platform-backend
+          newTag: latest
+        - name: security-platform-ai
+          newTag: latest
+        - name: security-platform-frontend
+          newTag: latest
+  
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: security-platform
+  
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+      allowEmpty: false
+    syncOptions:
+      - CreateNamespace=true
+      - PrunePropagationPolicy=foreground
+      - PruneLast=true
+    retry:
+      limit: 5
+      backoff:
+        duration: 5s
+        factor: 2
+        maxDuration: 3m
+  
+  revisionHistoryLimit: 10
+  
+  # Health assessment
+  ignoreDifferences:
+    - group: apps
+      kind: Deployment
+      jsonPointers:
+        - /spec/replicas
+
+---
+apiVersion: argoproj.io/v1alpha1
+kind: AppProject
+metadata:
+  name: security-platform-project
+  namespace: argocd
+spec:
+  description: Security Platform Project
+  
+  sourceRepos:
+    - https://github.com/your-org/security-platform.git
+    - https://charts.helm.sh/stable
+  
+  destinations:
+    - namespace: security-platform
+      server: https://kubernetes.default.svc
+    - namespace: monitoring
+      server: https://kubernetes.default.svc
+  
+  clusterResourceWhitelist:
+    - group: '*'
+      kind: '*'
+  
+  namespaceResourceWhitelist:
+    - group: '*'
+      kind: '*'
+  
+  # RBAC policies
+  roles:
+    - name: developer
+      description: Developer role
+      policies:
+        - p, proj:security-platform-project:developer, applications, get, security-platform-project/*, allow
+        - p, proj:security-platform-project:developer, applications, sync, security-platform-project/*, allow
+      groups:
+        - developers
+    
+    - name: admin
+      description: Admin role
+      policies:
+        - p, proj:security-platform-project:admin, applications, *, security-platform-project/*, allow
+      groups:
+        - admins
+

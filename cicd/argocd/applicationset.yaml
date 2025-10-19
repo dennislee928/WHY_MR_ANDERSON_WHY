@@ -1,0 +1,131 @@
+apiVersion: argoproj.io/v1alpha1
+kind: ApplicationSet
+metadata:
+  name: security-platform-multi-env
+  namespace: argocd
+spec:
+  generators:
+    # Multi-environment generator
+    - list:
+        elements:
+          - env: development
+            replicas: 1
+            resources:
+              requests:
+                cpu: "250m"
+                memory: "512Mi"
+              limits:
+                cpu: "500m"
+                memory: "1Gi"
+          
+          - env: staging
+            replicas: 2
+            resources:
+              requests:
+                cpu: "500m"
+                memory: "1Gi"
+              limits:
+                cpu: "1000m"
+                memory: "2Gi"
+          
+          - env: production
+            replicas: 3
+            resources:
+              requests:
+                cpu: "1000m"
+                memory: "2Gi"
+              limits:
+                cpu: "2000m"
+                memory: "4Gi"
+  
+  template:
+    metadata:
+      name: 'security-platform-{{env}}'
+      labels:
+        environment: '{{env}}'
+    
+    spec:
+      project: security-platform-project
+      
+      source:
+        repoURL: https://github.com/your-org/security-platform.git
+        targetRevision: '{{env}}'
+        path: infrastructure/kubernetes
+        
+        kustomize:
+          namePrefix: '{{env}}-'
+          commonLabels:
+            environment: '{{env}}'
+          replicas:
+            - name: backend
+              count: '{{replicas}}'
+            - name: ai-quantum
+              count: '{{replicas}}'
+            - name: frontend
+              count: '{{replicas}}'
+          commonAnnotations:
+            managed-by: argocd
+            environment: '{{env}}'
+      
+      destination:
+        server: https://kubernetes.default.svc
+        namespace: 'security-platform-{{env}}'
+      
+      syncPolicy:
+        automated:
+          prune: true
+          selfHeal: true
+        syncOptions:
+          - CreateNamespace=true
+
+---
+apiVersion: argoproj.io/v1alpha1
+kind: ApplicationSet
+metadata:
+  name: security-platform-multi-cloud
+  namespace: argocd
+spec:
+  generators:
+    # Multi-cluster generator for different cloud providers
+    - matrix:
+        generators:
+          - list:
+              elements:
+                - cloud: oci
+                  cluster: oci-cluster
+                  server: https://oci-k8s.example.com
+                
+                - cloud: ibm
+                  cluster: ibm-cluster
+                  server: https://ibm-k8s.example.com
+          
+          - list:
+              elements:
+                - env: production
+  
+  template:
+    metadata:
+      name: 'security-platform-{{cloud}}-{{env}}'
+      labels:
+        cloud: '{{cloud}}'
+        environment: '{{env}}'
+    
+    spec:
+      project: security-platform-project
+      
+      source:
+        repoURL: https://github.com/your-org/security-platform.git
+        targetRevision: main
+        path: 'infrastructure/kubernetes/{{cloud}}'
+      
+      destination:
+        server: '{{server}}'
+        namespace: 'security-platform-{{env}}'
+      
+      syncPolicy:
+        automated:
+          prune: true
+          selfHeal: true
+        syncOptions:
+          - CreateNamespace=true
+
