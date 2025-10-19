@@ -1,23 +1,11 @@
-<<<<<<< Updated upstream
 # Project-specific excludes
 Sext-Adventure/
 personal-publicdata/
 
-# Old project directories (backup only)
-Local_IPS-IDS/
-Security-and-Infrastructure-tools-Set/
+# Old project directories (backup only) - COMMENTED OUT FOR CLOUDFLARE DEPLOYMENT
+# Local_IPS-IDS/
+# Security-and-Infrastructure-tools-Set/
 
-# Build artifacts
-*.exe
-*.dll
-*.so
-*.dylib
-*.test
-*.out
-dist/
-build/
-bin/
-=======
 # Security-sensitive files
 *.pem
 *.key
@@ -108,13 +96,18 @@ Thumbs.db
 desktop.ini
 
 # Build artifacts
+*.exe
+*.dll
+*.so
+*.dylib
+*.test
+*.out
 dist/
 build/
 target/
 out/
 bin/
 obj/
->>>>>>> Stashed changes
 
 # Dependencies
 node_modules/
@@ -124,67 +117,6 @@ __pycache__/
 *.pyo
 *.pyd
 .Python
-<<<<<<< Updated upstream
-venv/
-env/
-ENV/
-
-# IDE
-.vscode/
-.idea/
-*.swp
-*.swo
-*~
-.DS_Store
-
-# Logs
-*.log
-logs/
-*.log.*
-
-# Environment files
-.env
-.env.local
-.env.*.local
-*.key
-*.pem
-!configs/certs/*.pem
-
-# Secrets
-secrets/
-*.secret
-*.token
-
-# Temporary files
-tmp/
-temp/
-*.tmp
-*.temp
-
-# Test coverage
-coverage/
-*.cover
-.coverage
-htmlcov/
-
-# AI/Quantum results
-src/ai-quantum/results/*.json
-src/ai-quantum/qasm_output/*.qasm
-
-# Database
-*.db
-*.sqlite
-*.sqlite3
-
-# OS
-Thumbs.db
-ehthumbs.db
-Desktop.ini
-
-# Keep example files
-!.env.example
-!*.example.*
-=======
 env/
 venv/
 ENV/
@@ -211,9 +143,9 @@ pids/
 
 # Microbundle cache
 .rpt2_cache/
-.rts2_cache_cjs/
-.rts2_cache_es/
-.rts2_cache_umd/
+.rpt2_cache_cjs/
+.rpt2_cache_es/
+.rpt2_cache_umd/
 
 # Optional REPL history
 .node_repl_history
@@ -347,4 +279,16 @@ security-audits/
 incident-response/
 security-incidents/
 breach-reports/
->>>>>>> Stashed changes
+
+# AI/Quantum results
+src/ai-quantum/results/*.json
+src/ai-quantum/qasm_output/*.qasm
+
+# Database
+*.db
+*.sqlite
+*.sqlite3
+
+# Keep example files
+!.env.example
+!*.example.*
