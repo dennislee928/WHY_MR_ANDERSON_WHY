@@ -22,32 +22,32 @@ name = "security-platform-prod"
 [env.staging]
 name = "security-platform-staging"
 
-# D1 Database binding - 已設定
-[[d1_databases]]
-binding = "DB"
-database_name = "security_platform_db"
-database_id = "security_platform_db" # 已設定
+# D1 Database binding (commented out until database is created)
+# [[d1_databases]]
+# binding = "DB"
+# database_name = "security_platform_db"
+# database_id = "" # Add your D1 database ID
 
-# KV Namespace bindings - 已設定
-[[kv_namespaces]]
-binding = "CACHE"
-id = "cf-dapp-cache-prod" # 已設定
-preview_id = ""
+# KV Namespace bindings (commented out until namespaces are created)
+# [[kv_namespaces]]
+# binding = "CACHE"
+# id = "" # Add your KV namespace ID
+# preview_id = "" # Add your preview KV namespace ID
 
-[[kv_namespaces]]
-binding = "SESSIONS"
-id = "cf-dapp-cache-prod" # 已設定
-preview_id = ""
+# [[kv_namespaces]]
+# binding = "SESSIONS"
+# id = "" # Add your sessions KV namespace ID
+# preview_id = ""
 
-# Durable Objects - 已設定
-[[durable_objects.bindings]]
-name = "WEBSOCKET_MANAGER"
-class_name = "WebSocketManager"
-script_name = "web3-cloudflare-api_ApiContainer" # 已設定
+# Durable Objects (for WebSocket management - commented out for now)
+# [[durable_objects.bindings]]
+# name = "WEBSOCKET_MANAGER"
+# class_name = "WebSocketManager"
+# script_name = "security-platform-worker"
 
-[[migrations]]
-tag = "v1"
-new_classes = ["WebSocketManager"]
+# [[migrations]]
+# tag = "v1"
+# new_classes = ["WebSocketManager"]
 
 # Resource limits (within free tier)
 [limits]
