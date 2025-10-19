@@ -1,3 +1,4 @@
+<<<<<<< Updated upstream
 # Project-specific excludes
 Sext-Adventure/
 personal-publicdata/
@@ -16,6 +17,104 @@ Security-and-Infrastructure-tools-Set/
 dist/
 build/
 bin/
+=======
+# Security-sensitive files
+*.pem
+*.key
+*.p12
+*.pfx
+*.jks
+*.keystore
+*.crt
+*.cert
+*.cer
+*.der
+*.p7b
+*.p7c
+*.p7s
+*.p8
+*.p12
+*.pfx
+*.spc
+*.stl
+*.cst
+*.csr
+
+# Environment files with secrets
+.env
+.env.local
+.env.production
+.env.staging
+.env.development
+.env.test
+*.env
+*.env.*
+
+# Database credentials
+database.yml
+database.json
+db_config.yml
+db_config.json
+
+# Docker secrets
+docker-compose.override.yml
+docker-compose.prod.yml
+docker-compose.secrets.yml
+
+# Kubernetes secrets
+secrets.yaml
+secrets.yml
+*-secret.yaml
+*-secret.yml
+
+# Vault files
+vault.hcl
+vault.json
+vault-config.*
+
+# API keys and tokens
+api_keys.txt
+tokens.txt
+credentials.txt
+secrets.txt
+
+# Backup files that might contain secrets
+*.backup
+*.bak
+*.old
+*.orig
+
+# Log files that might contain sensitive data
+*.log
+logs/
+log/
+
+# Temporary files
+tmp/
+temp/
+.tmp/
+.temp/
+
+# IDE files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS files
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Build artifacts
+dist/
+build/
+target/
+out/
+bin/
+obj/
+>>>>>>> Stashed changes
 
 # Dependencies
 node_modules/
@@ -25,6 +124,7 @@ __pycache__/
 *.pyo
 *.pyd
 .Python
+<<<<<<< Updated upstream
 venv/
 env/
 ENV/
@@ -84,3 +184,167 @@ Desktop.ini
 # Keep example files
 !.env.example
 !*.example.*
+=======
+env/
+venv/
+ENV/
+env.bak/
+venv.bak/
+
+# Coverage reports
+coverage/
+.nyc_output/
+.coverage
+htmlcov/
+
+# Runtime data
+pids/
+*.pid
+*.seed
+*.pid.lock
+
+# Optional npm cache directory
+.npm
+
+# Optional eslint cache
+.eslintcache
+
+# Microbundle cache
+.rpt2_cache/
+.rts2_cache_cjs/
+.rts2_cache_es/
+.rts2_cache_umd/
+
+# Optional REPL history
+.node_repl_history
+
+# Output of 'npm pack'
+*.tgz
+
+# Yarn Integrity file
+.yarn-integrity
+
+# parcel-bundler cache (https://parceljs.org/)
+.cache
+.parcel-cache
+
+# Next.js build output
+.next
+
+# Nuxt.js build / generate output
+.nuxt
+
+# Gatsby files
+.cache/
+public
+
+# Storybook build outputs
+.out
+.storybook-out
+
+# Temporary folders
+tmp/
+temp/
+
+# Editor directories and files
+.vscode/*
+!.vscode/extensions.json
+.idea
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+
+# Local development
+.local
+local/
+
+# Terraform
+*.tfstate
+*.tfstate.*
+.terraform/
+.terraform.lock.hcl
+
+# Ansible
+*.retry
+
+# Vagrant
+.vagrant/
+
+# Docker
+.dockerignore
+
+# Kubernetes
+kubeconfig
+*.kubeconfig
+
+# Helm
+charts/
+*.tgz
+
+# Certificates and keys (additional patterns)
+**/certs/
+**/certificates/
+**/keys/
+**/private/
+**/secrets/
+**/ssl/
+**/tls/
+
+# Configuration files that might contain secrets
+config/secrets.yml
+config/secrets.yaml
+config/database.yml
+config/database.yaml
+config/production.yml
+config/production.yaml
+config/staging.yml
+config/staging.yaml
+
+# Application specific
+uploads/
+storage/
+files/
+media/
+
+# Backup directories
+backups/
+backup/
+
+# Test files that might contain test secrets
+test/secrets/
+tests/secrets/
+spec/secrets/
+specs/secrets/
+
+# Documentation that might contain examples with real secrets
+docs/secrets/
+documentation/secrets/
+
+# CI/CD files that might contain secrets
+.github/secrets/
+.gitlab-ci-secrets/
+azure-pipelines-secrets/
+jenkins-secrets/
+
+# Monitoring and logging
+monitoring/secrets/
+logging/secrets/
+metrics/secrets/
+
+# Security tools output
+security-reports/
+vulnerability-reports/
+penetration-test-results/
+
+# Compliance and audit
+audit-logs/
+compliance-reports/
+security-audits/
+
+# Incident response
+incident-response/
+security-incidents/
+breach-reports/
+>>>>>>> Stashed changes
