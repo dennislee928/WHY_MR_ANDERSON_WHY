@@ -1,0 +1,182 @@
+name = "security-platform-containers"
+main = "src/index.js"
+compatibility_date = "2024-01-01"
+
+# Account details
+workers_dev = true
+
+# ========================================
+# CLOUDFLARE CONTAINERS CONFIGURATION
+# ========================================
+
+# Container configuration for security platform
+[containers]
+# Backend API Container
+[[containers.bindings]]
+binding = "BACKEND_API"
+image = "security-platform/backend-api"
+tag = "latest"
+
+# AI/Quantum Processing Container
+[[containers.bindings]]
+binding = "AI_QUANTUM"
+image = "security-platform/ai-quantum"
+tag = "latest"
+
+# Security Tools Container
+[[containers.bindings]]
+binding = "SECURITY_TOOLS"
+image = "security-platform/security-tools"
+tag = "latest"
+
+# Database Container
+[[containers.bindings]]
+binding = "DATABASE"
+image = "security-platform/database"
+tag = "latest"
+
+# Monitoring Container
+[[containers.bindings]]
+binding = "MONITORING"
+image = "security-platform/monitoring"
+tag = "latest"
+
+# ========================================
+# EXISTING BINDINGS (保持現有配置)
+# ========================================
+
+# D1 Database - 主要資料庫，儲存安全事件、威脅情報、設備資訊
+[[d1_databases]]
+binding = "DB"
+database_name = "security_platform_db"
+database_id = "security_platform_db" # 已設定
+
+# KV Namespace - 快取層，提升 API 回應速度
+[[kv_namespaces]]
+binding = "CACHE"
+id = "cf-dapp-cache-prod" # 已設定
+preview_id = ""
+
+# KV Namespace - 會話管理，儲存用戶狀態、API 金鑰
+[[kv_namespaces]]
+binding = "SESSIONS"
+id = "cf-dapp-cache-prod" # 已設定
+preview_id = ""
+
+# Durable Objects - 已設定
+[[durable_objects.bindings]]
+name = "WEBSOCKET_MANAGER"
+class_name = "WebSocketManager"
+script_name = "web3-cloudflare-api_ApiContainer" # 已設定
+
+[[migrations]]
+tag = "v1"
+new_classes = ["WebSocketManager"]
+
+# ========================================
+# CONTAINER-SPECIFIC CONFIGURATION
+# ========================================
+
+# Container resource limits
+[containers.resources]
+cpu_limit = "1000m"
+memory_limit = "512Mi"
+
+# Container environment variables
+[containers.env]
+NODE_ENV = "production"
+LOG_LEVEL = "info"
+API_VERSION = "v1"
+
+# Container health checks
+[containers.health_check]
+path = "/health"
+interval = 30
+timeout = 10
+retries = 3
+
+# ========================================
+# ROUTES AND DOMAINS
+# ========================================
+
+# Routes for container endpoints
+routes = [
+  { pattern = "api.security-platform.com/backend/*", zone_name = "security-platform.com" },
+  { pattern = "api.security-platform.com/ai/*", zone_name = "security-platform.com" },
+  { pattern = "api.security-platform.com/security/*", zone_name = "security-platform.com" },
+  { pattern = "api.security-platform.com/monitoring/*", zone_name = "security-platform.com" }
+]
+
+# ========================================
+# ENVIRONMENT CONFIGURATIONS
+# ========================================
+
+[env.production]
+name = "security-platform-containers-prod"
+routes = [
+  { pattern = "api.security-platform.com/*", zone_name = "security-platform.com" }
+]
+
+[env.staging]
+name = "security-platform-containers-staging"
+routes = [
+  { pattern = "staging-api.security-platform.com/*", zone_name = "security-platform.com" }
+]
+
+# ========================================
+# RESOURCE LIMITS & CONFIGURATION
+# ========================================
+
+# Resource limits (within free tier)
+[limits]
+cpu_ms = 30000 # 30 seconds max per request
+
+# Analytics
+[observability]
+enabled = true
+
+# Build configuration
+[build]
+command = "npm run build"
+
+# ========================================
+# CONTAINER USAGE EXAMPLES
+# ========================================
+
+# 使用範例：
+# 
+# 1. Backend API Container:
+#    const response = await env.BACKEND_API.fetch('/api/v1/threats');
+#
+# 2. AI/Quantum Container:
+#    const analysis = await env.AI_QUANTUM.fetch('/api/v1/analyze', {
+#      method: 'POST',
+#      body: JSON.stringify(threatData)
+#    });
+#
+# 3. Security Tools Container:
+#    const scanResult = await env.SECURITY_TOOLS.fetch('/api/v1/scan', {
+#      method: 'POST',
+#      body: JSON.stringify(scanConfig)
+#    });
+#
+# 4. Database Container:
+#    const dbResponse = await env.DATABASE.fetch('/api/v1/query', {
+#      method: 'POST',
+#      body: JSON.stringify(query)
+#    });
+#
+# 5. Monitoring Container:
+#    const metrics = await env.MONITORING.fetch('/api/v1/metrics');
+#
+# 6. Container Health Check:
+#    const health = await env.BACKEND_API.fetch('/health');
+#
+# 7. Container Logs:
+#    const logs = await env.MONITORING.fetch('/api/v1/logs');
+#
+# 8. Container Scaling:
+#    const scale = await env.BACKEND_API.fetch('/api/v1/scale', {
+#      method: 'POST',
+#      body: JSON.stringify({ replicas: 3 })
+#    });
