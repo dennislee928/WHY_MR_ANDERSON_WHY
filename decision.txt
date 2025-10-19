@@ -1,0 +1,19 @@
+Project Integration Strategy
+a) Merge both projects into one unified system (recommended for simpler structure)
+
+
+CI/CD Platform Choice
+d) Provide configs for all three(may need terraform)
+
+
+Primary Deployment Target
+d) Multi-cloud strategy with all options(based on price)
+
+Documentation Language
+
+b) Keep bilingual (English + Traditional Chinese), and store docs in Document
+
+
+Project Structure Simplification
+
+d) All of the above

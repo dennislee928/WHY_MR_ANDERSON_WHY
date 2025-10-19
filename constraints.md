@@ -64,3 +64,26 @@ Queues
 
 
 + $0.40 per additional 1 million standard operations
+___
+Project Integration Strategy
+a) Merge both projects into one unified system (recommended for simpler structure)
+b) Keep them separate but standardize their structure and CI/CD
+c) Focus only on Local_IPS-IDS (main project)
+CI/CD Platform Choice
+a) Buddy CI (easiest setup, good for Docker)
+b) Argo CD (GitOps, best for Kubernetes)
+c) Harness (enterprise-grade, complex)
+d) Provide configs for all three
+Primary Deployment Target
+a) Cloudflare Workers (per constraints.md, serverless)
+b) OCI Free Tier (VM/container based)
+c) IBM Cloud Free Tier (VM/container based)
+d) Multi-cloud strategy with all options
+Documentation Language
+a) Translate all Chinese docs to English only
+b) Keep bilingual (English + Traditional Chinese)
+Project Structure Simplification
+a) Consolidate duplicate configs/scripts across projects
+b) Flatten deep directory structures
+c) Remove experimental/archive folders
+d) All of the above
