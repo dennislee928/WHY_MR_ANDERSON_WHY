@@ -1,0 +1,33 @@
+# OCI Terraform Variables Example
+# Copy this file to terraform.tfvars and fill in your values
+
+# OCI Authentication
+tenancy_ocid     = "ocid1.tenancy.oc1..aaaaaaaXXXXXXXXXXXX"
+user_ocid        = "ocid1.user.oc1..aaaaaaaXXXXXXXXXXXX"
+fingerprint      = "xx:xx:xx:xx:xx:xx:xx:xx:xx:xx:xx:xx:xx:xx:xx:xx"
+private_key_path = "~/.oci/oci_api_key.pem"
+
+# Region and Compartment
+region          = "us-ashburn-1"  # or your preferred region
+compartment_id  = "ocid1.compartment.oc1..aaaaaaaXXXXXXXXXXXX"
+
+# Environment
+environment = "production"
+
+# Instance Configuration (Always Free Tier)
+# Option 1: Arm-based (recommended for Always Free)
+instance_shape     = "VM.Standard.A1.Flex"
+instance_ocpus     = 2
+instance_memory_gb = 12
+
+# Option 2: AMD-based (limited Always Free)
+# instance_shape     = "VM.Standard.E2.1.Micro"
+# instance_ocpus     = 1
+# instance_memory_gb = 1
+
+# Storage
+data_volume_size_gb = 100  # Up to 200GB free
+
+# SSH Key
+ssh_public_key_path = "~/.ssh/id_rsa.pub"
+

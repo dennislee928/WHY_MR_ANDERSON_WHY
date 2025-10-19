@@ -1,0 +1,187 @@
+#cloud-config
+# Cloud-init configuration for Database & Monitoring Server
+
+package_update: true
+package_upgrade: true
+
+packages:
+  - docker.io
+  - docker-compose
+  - postgresql-client
+  - redis-tools
+  - curl
+  - wget
+  - htop
+  - vim
+
+runcmd:
+  # Install Docker Compose v2
+  - curl -L "https://github.com/docker/compose/releases/download/v${docker_compose_version}/docker-compose-$(uname -s)-$(uname -m)" -o /usr/local/bin/docker-compose
+  - chmod +x /usr/local/bin/docker-compose
+  
+  # Configure Docker
+  - systemctl enable docker
+  - systemctl start docker
+  - usermod -aG docker ubuntu
+  
+  # Setup data directory on block volume (will be attached separately)
+  - mkdir -p /mnt/data
+  - mkdir -p /mnt/data/postgres
+  - mkdir -p /mnt/data/redis
+  - mkdir -p /mnt/data/prometheus
+  - mkdir -p /mnt/data/grafana
+  - mkdir -p /mnt/data/backups
+  - chown -R ubuntu:ubuntu /mnt/data
+  
+  # Create database docker-compose
+  - mkdir -p /opt/database
+  - chown -R ubuntu:ubuntu /opt/database
+  
+  # Set up automatic backups
+  - |
+    cat > /usr/local/bin/backup-databases.sh <<'EOF'
+    #!/bin/bash
+    DATE=$(date +%Y%m%d_%H%M%S)
+    BACKUP_DIR=/mnt/data/backups
+    
+    # Backup PostgreSQL
+    docker exec postgres pg_dumpall -U sectools > $BACKUP_DIR/postgres_$DATE.sql
+    
+    # Backup Redis
+    docker exec redis redis-cli SAVE
+    cp /mnt/data/redis/dump.rdb $BACKUP_DIR/redis_$DATE.rdb
+    
+    # Cleanup old backups (keep 7 days)
+    find $BACKUP_DIR -name "*.sql" -mtime +7 -delete
+    find $BACKUP_DIR -name "*.rdb" -mtime +7 -delete
+    
+    echo "Backup completed: $DATE"
+    EOF
+  - chmod +x /usr/local/bin/backup-databases.sh
+  
+  # Schedule daily backups
+  - echo "0 2 * * * /usr/local/bin/backup-databases.sh" | crontab -
+
+write_files:
+  - path: /opt/database/docker-compose.yml
+    content: |
+      version: '3.8'
+      
+      services:
+        postgres:
+          image: postgres:15-alpine
+          container_name: postgres
+          restart: unless-stopped
+          environment:
+            POSTGRES_USER: sectools
+            POSTGRES_PASSWORD: ${DB_PASSWORD}
+            POSTGRES_DB: security
+          volumes:
+            - /mnt/data/postgres:/var/lib/postgresql/data
+          ports:
+            - "5432:5432"
+          healthcheck:
+            test: ["CMD-SHELL", "pg_isready -U sectools"]
+            interval: 30s
+            timeout: 10s
+            retries: 3
+
+        redis:
+          image: redis:7-alpine
+          container_name: redis
+          restart: unless-stopped
+          command: redis-server --appendonly yes
+          volumes:
+            - /mnt/data/redis:/data
+          ports:
+            - "6379:6379"
+          healthcheck:
+            test: ["CMD", "redis-cli", "ping"]
+            interval: 30s
+            timeout: 10s
+            retries: 3
+
+        prometheus:
+          image: prom/prometheus:latest
+          container_name: prometheus
+          restart: unless-stopped
+          command:
+            - '--config.file=/etc/prometheus/prometheus.yml'
+            - '--storage.tsdb.path=/prometheus'
+            - '--storage.tsdb.retention.time=30d'
+          volumes:
+            - /mnt/data/prometheus:/prometheus
+            - ./prometheus.yml:/etc/prometheus/prometheus.yml
+          ports:
+            - "9090:9090"
+
+        grafana:
+          image: grafana/grafana:latest
+          container_name: grafana
+          restart: unless-stopped
+          environment:
+            GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_PASSWORD}
+            GF_INSTALL_PLUGINS: grafana-clock-panel
+          volumes:
+            - /mnt/data/grafana:/var/lib/grafana
+          ports:
+            - "3000:3000"
+
+      networks:
+        default:
+          driver: bridge
+    permissions: '0644'
+
+  - path: /opt/database/prometheus.yml
+    content: |
+      global:
+        scrape_interval: 15s
+        evaluation_interval: 15s
+
+      scrape_configs:
+        - job_name: 'prometheus'
+          static_configs:
+            - targets: ['localhost:9090']
+
+        - job_name: 'backend'
+          static_configs:
+            - targets: ['APP_SERVER_IP:3001']
+
+        - job_name: 'ai-quantum'
+          static_configs:
+            - targets: ['APP_SERVER_IP:8000']
+    permissions: '0644'
+
+  - path: /etc/systemd/system/database-services.service
+    content: |
+      [Unit]
+      Description=Database and Monitoring Services
+      Requires=docker.service
+      After=docker.service
+
+      [Service]
+      Type=oneshot
+      RemainAfterExit=yes
+      WorkingDirectory=/opt/database
+      ExecStart=/usr/local/bin/docker-compose up -d
+      ExecStop=/usr/local/bin/docker-compose down
+
+      [Install]
+      WantedBy=multi-user.target
+    permissions: '0644'
+
+final_message: |
+  Database server setup complete!
+  
+  Next steps:
+  1. SSH into the server: ssh ubuntu@<public_ip>
+  2. Mount the block volume to /mnt/data
+  3. Configure environment variables in /opt/database/.env
+  4. Start services: cd /opt/database && docker-compose up -d
+  
+  Services available:
+  - PostgreSQL: <public_ip>:5432
+  - Redis: <public_ip>:6379
+  - Prometheus: http://<public_ip>:9090
+  - Grafana: http://<public_ip>:3000
+
