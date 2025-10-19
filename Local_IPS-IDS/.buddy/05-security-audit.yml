@@ -1,0 +1,41 @@
+- pipeline: "Security Audit"
+  on: "CLICK"
+  priority: "HIGH"
+  trigger_time: "MANUAL"
+  actions:
+  
+  # ============================================
+  # Stage 1: 漏洞掃描
+  # ============================================
+  - action: "Trivy Vulnerability Scan"
+    type: "BUILD"
+    docker_image_name: "aquasec/trivy"
+    docker_image_tag: "latest"
+    execute_commands:
+    - "trivy fs --security-checks vuln,config --format json --output trivy-report.json ."
+    - "trivy fs --severity HIGH,CRITICAL ."
+  
+  # ============================================
+  # Stage 2: Go 安全掃描
+  # ============================================
+  - action: "GoSec Security Scan"
+    type: "BUILD"
+    docker_image_name: "library/golang"
+    docker_image_tag: "1.21"
+    execute_commands:
+    - "go install github.com/securego/gosec/v2/cmd/gosec@latest"
+    - "gosec -fmt json -out gosec-report.json ./..."
+    - "gosec ./..."
+    cached_dirs:
+    - "/go/pkg/mod"
+  
+  # ============================================
+  # Stage 3: OWASP ZAP 掃描
+  # ============================================
+  - action: "OWASP ZAP Scan"
+    type: "BUILD"
+    docker_image_name: "owasp/zap2docker-stable"
+    docker_image_tag: "latest"
+    execute_commands:
+    - "zap-baseline.py -t http://localhost:3001 -r zap-report.html || true"
+    - "echo 'ZAP scan completed. Check zap-report.html for details.'"

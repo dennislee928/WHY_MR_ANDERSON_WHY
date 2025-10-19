@@ -1,0 +1,177 @@
+# Axiom UI Server 設定檔範本
+# ================================
+
+# 基本設定
+app:
+  name: "Axiom UI Server"
+  version: "1.0.0"
+  environment: "${ENVIRONMENT:-production}"
+
+# 日誌設定
+logging:
+  level: "${LOG_LEVEL:-info}"
+  format: "${LOG_FORMAT:-json}"
+  output: "stdout"
+  file_path: "/app/logs/ui.log"
+  max_size: 100
+  max_backups: 5
+  max_age: 30
+  compress: true
+
+# 伺服器設定
+server:
+  listen_address: "0.0.0.0"
+  listen_port: ${LISTEN_PORT:-3001}
+  read_timeout: "30s"
+  write_timeout: "30s"
+  idle_timeout: "60s"
+  max_header_bytes: 1048576
+
+# TLS 設定
+tls:
+  enabled: false
+  cert_file: "/certs/server.crt"
+  key_file: "/certs/server.key"
+  ca_file: "/certs/ca.crt"
+
+# CORS 設定
+cors:
+  enabled: true
+  allowed_origins:
+    - "*"
+  allowed_methods:
+    - "GET"
+    - "POST"
+    - "PUT"
+    - "DELETE"
+    - "OPTIONS"
+  allowed_headers:
+    - "*"
+  exposed_headers: []
+  allow_credentials: false
+  max_age: 86400
+
+# WebSocket 設定
+websocket:
+  enabled: true
+  path: "/ws"
+  max_connections: 100
+  ping_interval: "30s"
+  pong_timeout: "10s"
+  buffer_size: 1024
+
+# Prometheus 整合設定
+prometheus:
+  enabled: true
+  url: "${PROMETHEUS_URL:-http://prometheus:9090}"
+  timeout: "30s"
+  query_timeout: "5s"
+
+# Grafana 整合設定
+grafana:
+  enabled: true
+  url: "${GRAFANA_URL:-http://grafana:3000}"
+  api_key: "${GRAFANA_API_KEY:-}"
+  timeout: "30s"
+  username: "${GRAFANA_USERNAME:-admin}"
+  password: "${GRAFANA_PASSWORD:-pandora123}"
+
+# Loki 整合設定
+loki:
+  enabled: true
+  url: "${LOKI_URL:-http://loki:3100}"
+  timeout: "30s"
+  query_limit: 1000
+
+# 快取設定
+cache:
+  enabled: true
+  type: "memory"  # memory, redis
+  ttl: "5m"
+  max_entries: 1000
+  redis:
+    host: "${REDIS_HOST:-redis}"
+    port: ${REDIS_PORT:-6379}
+    password: "${REDIS_PASSWORD:-}"
+    database: ${REDIS_DATABASE:-1}
+
+# 會話設定
+session:
+  enabled: true
+  timeout: "24h"
+  cookie_name: "axiom_session"
+  cookie_secure: false
+  cookie_http_only: true
+  cookie_same_site: "lax"
+
+# 安全設定
+security:
+  csrf_protection: true
+  csrf_token_length: 32
+  rate_limiting:
+    enabled: true
+    requests_per_minute: 100
+    burst: 20
+  ip_filtering:
+    enabled: false
+    whitelist: []
+    blacklist: []
+
+# API 設定
+api:
+  version: "v1"
+  base_path: "/api"
+  max_request_size: "10MB"
+  timeout: "30s"
+  pagination:
+    default_limit: 20
+    max_limit: 100
+
+# 前端設定
+frontend:
+  static_path: "/app/web"
+  index_file: "index.html"
+  cache_control: "no-cache"
+  gzip_enabled: true
+
+# 監控設定
+monitoring:
+  enabled: true
+  metrics_path: "/metrics"
+  health_path: "/health"
+  profiling_enabled: ${ENABLE_PPROF:-false}
+
+# 資料庫設定 (可選)
+database:
+  enabled: false
+  type: "postgres"
+  host: "${DATABASE_HOST:-postgres}"
+  port: ${DATABASE_PORT:-5432}
+  name: "${DATABASE_NAME:-pandora}"
+  username: "${DATABASE_USER:-pandora}"
+  password: "${DATABASE_PASSWORD:-pandora123}"
+  ssl_mode: "${DATABASE_SSL_MODE:-require}"
+
+# 外部服務設定
+external_services:
+  agent_url: "${AGENT_URL:-http://pandora-agent:8080}"
+  timeout: "30s"
+  retry_attempts: 3
+  retry_delay: "1s"
+
+# 功能開關
+features:
+  dashboard: true
+  events: true
+  metrics: true
+  alerts: true
+  settings: true
+  user_management: false
+  audit_log: true
+
+# 開發設定
+development:
+  debug_mode: ${DEBUG_MODE:-false}
+  hot_reload: false
+  mock_data: false
+  verbose_logging: false

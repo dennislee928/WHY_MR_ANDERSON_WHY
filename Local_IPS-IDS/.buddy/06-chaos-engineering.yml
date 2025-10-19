@@ -1,0 +1,69 @@
+- pipeline: "Chaos Engineering"
+  on: "CLICK"
+  priority: "NORMAL"
+  trigger_time: "MANUAL"
+  actions:
+  
+  - action: "Setup Chaos Mesh"
+    type: "BUILD"
+    docker_image_name: "bitnami/kubectl"
+    docker_image_tag: "1.28"
+    execute_commands:
+    - "# Install Chaos Mesh"
+    - "kubectl apply -f https://mirrors.chaos-mesh.org/latest/crd.yaml"
+    - "kubectl apply -f https://mirrors.chaos-mesh.org/latest/chaos-mesh.yaml"
+    - "# Wait for Chaos Mesh to be ready"
+    - "kubectl wait --for=condition=Ready pods --all -n chaos-mesh --timeout=300s"
+  
+  - action: "Run Chaos Tests"
+    type: "BUILD"
+    docker_image_name: "bitnami/kubectl"
+    docker_image_tag: "1.28"
+    execute_commands:
+    - "# Create chaos test directory"
+    - "mkdir -p tests/chaos"
+    - "# Pod failure test"
+    - |
+      cat > tests/chaos/pod-failure.yaml <<'EOF'
+      apiVersion: chaos-mesh.org/v1alpha1
+      kind: PodChaos
+      metadata:
+        name: device-service-failure
+        namespace: pandora-system
+      spec:
+        action: pod-failure
+        mode: one
+        duration: "30s"
+        selector:
+          namespaces:
+            - pandora-system
+          labelSelectors:
+            app: device-service
+      EOF
+    - "kubectl apply -f tests/chaos/pod-failure.yaml"
+    - "sleep 35"
+    - "kubectl delete -f tests/chaos/pod-failure.yaml"
+    - "# Network delay test"
+    - |
+      cat > tests/chaos/network-delay.yaml <<'EOF'
+      apiVersion: chaos-mesh.org/v1alpha1
+      kind: NetworkChaos
+      metadata:
+        name: network-delay
+        namespace: pandora-system
+      spec:
+        action: delay
+        mode: all
+        selector:
+          namespaces:
+            - pandora-system
+        delay:
+          latency: "100ms"
+          correlation: "25"
+          jitter: "10ms"
+        duration: "2m"
+      EOF
+    - "kubectl apply -f tests/chaos/network-delay.yaml"
+    - "sleep 125"
+    - "kubectl delete -f tests/chaos/network-delay.yaml"
+    - "echo 'Chaos tests completed. Check pod logs for resilience verification.'"

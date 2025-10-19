@@ -1,0 +1,639 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Pandora Box Console IDS-IPS</title>
+    <meta name="description" content="智慧型入侵偵測與防護系統">
+    <link rel="icon" type="image/x-icon" href="/static/favicon.ico">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: #333;
+            min-height: 100vh;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+
+        .header {
+            text-align: center;
+            color: white;
+            margin-bottom: 40px;
+        }
+
+        .header h1 {
+            font-size: 3em;
+            margin-bottom: 10px;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.3);
+        }
+
+        .header p {
+            font-size: 1.2em;
+            opacity: 0.9;
+        }
+
+        .dashboard {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 20px;
+            margin-bottom: 40px;
+        }
+
+        .card {
+            background: rgba(255, 255, 255, 0.95);
+            border-radius: 15px;
+            padding: 25px;
+            box-shadow: 0 8px 32px rgba(0,0,0,0.1);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            transition: transform 0.3s ease, box-shadow 0.3s ease;
+        }
+
+        .card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 12px 40px rgba(0,0,0,0.15);
+        }
+
+        .card h3 {
+            color: #4a5568;
+            margin-bottom: 15px;
+            font-size: 1.3em;
+            display: flex;
+            align-items: center;
+        }
+
+        .card h3::before {
+            content: '';
+            width: 8px;
+            height: 8px;
+            background: #48bb78;
+            border-radius: 50%;
+            margin-right: 10px;
+        }
+
+        .status-indicator {
+            display: inline-block;
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            margin-right: 8px;
+        }
+
+        .status-online {
+            background: #48bb78;
+            box-shadow: 0 0 10px rgba(72, 187, 120, 0.5);
+        }
+
+        .status-offline {
+            background: #f56565;
+            box-shadow: 0 0 10px rgba(245, 101, 101, 0.5);
+        }
+
+        .metric {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 10px 0;
+            border-bottom: 1px solid #e2e8f0;
+        }
+
+        .metric:last-child {
+            border-bottom: none;
+        }
+
+        .metric-value {
+            font-weight: bold;
+            color: #2d3748;
+        }
+
+        .controls {
+            display: flex;
+            gap: 10px;
+            margin-top: 20px;
+            flex-wrap: wrap;
+        }
+
+        .btn {
+            padding: 12px 24px;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 600;
+            transition: all 0.3s ease;
+            text-decoration: none;
+            display: inline-block;
+            text-align: center;
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 15px rgba(102, 126, 234, 0.4);
+        }
+
+        .btn-success {
+            background: linear-gradient(135deg, #48bb78 0%, #38a169 100%);
+            color: white;
+        }
+
+        .btn-success:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 15px rgba(72, 187, 120, 0.4);
+        }
+
+        .btn-danger {
+            background: linear-gradient(135deg, #f56565 0%, #e53e3e 100%);
+            color: white;
+        }
+
+        .btn-danger:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 15px rgba(245, 101, 101, 0.4);
+        }
+
+        .events {
+            background: rgba(255, 255, 255, 0.95);
+            border-radius: 15px;
+            padding: 25px;
+            box-shadow: 0 8px 32px rgba(0,0,0,0.1);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+        }
+
+        .events h3 {
+            color: #4a5568;
+            margin-bottom: 20px;
+            font-size: 1.3em;
+        }
+
+        .event {
+            padding: 15px;
+            margin-bottom: 10px;
+            border-left: 4px solid #667eea;
+            background: rgba(102, 126, 234, 0.05);
+            border-radius: 0 8px 8px 0;
+        }
+
+        .event-high {
+            border-left-color: #f56565;
+            background: rgba(245, 101, 101, 0.05);
+        }
+
+        .event-medium {
+            border-left-color: #ed8936;
+            background: rgba(237, 137, 54, 0.05);
+        }
+
+        .event-time {
+            font-size: 0.9em;
+            color: #718096;
+            margin-bottom: 5px;
+        }
+
+        .footer {
+            text-align: center;
+            color: rgba(255, 255, 255, 0.8);
+            margin-top: 40px;
+            padding: 20px;
+        }
+
+        .loading {
+            display: inline-block;
+            width: 20px;
+            height: 20px;
+            border: 3px solid #f3f3f3;
+            border-top: 3px solid #667eea;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin-right: 10px;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        .alert {
+            padding: 15px;
+            margin-bottom: 20px;
+            border-radius: 8px;
+            border: 1px solid transparent;
+        }
+
+        .alert-success {
+            background: rgba(72, 187, 120, 0.1);
+            border-color: #48bb78;
+            color: #2f855a;
+        }
+
+        .alert-error {
+            background: rgba(245, 101, 101, 0.1);
+            border-color: #f56565;
+            color: #c53030;
+        }
+
+        @media (max-width: 768px) {
+            .header h1 {
+                font-size: 2em;
+            }
+            
+            .dashboard {
+                grid-template-columns: 1fr;
+            }
+            
+            .controls {
+                justify-content: center;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🛡️ Pandora Box Console</h1>
+            <p>智慧型入侵偵測與防護系統 (IDS-IPS)</p>
+        </div>
+
+        <div id="alerts"></div>
+
+        <div class="dashboard">
+            <div class="card">
+                <h3>系統狀態</h3>
+                <div class="metric">
+                    <span>系統運行狀態</span>
+                    <span class="metric-value">
+                        <span id="system-status" class="status-indicator status-online"></span>
+                        <span id="system-status-text">線上</span>
+                    </span>
+                </div>
+                <div class="metric">
+                    <span>裝置連接狀態</span>
+                    <span class="metric-value">
+                        <span id="device-status" class="status-indicator status-online"></span>
+                        <span id="device-status-text">已連接</span>
+                    </span>
+                </div>
+                <div class="metric">
+                    <span>網路狀態</span>
+                    <span class="metric-value">
+                        <span id="network-status" class="status-indicator status-online"></span>
+                        <span id="network-status-text">正常</span>
+                    </span>
+                </div>
+                <div class="metric">
+                    <span>系統運行時間</span>
+                    <span class="metric-value" id="uptime">計算中...</span>
+                </div>
+            </div>
+
+            <div class="card">
+                <h3>安全指標</h3>
+                <div class="metric">
+                    <span>威脅偵測數量</span>
+                    <span class="metric-value" id="threats-detected">0</span>
+                </div>
+                <div class="metric">
+                    <span>檢查封包數量</span>
+                    <span class="metric-value" id="packets-inspected">0</span>
+                </div>
+                <div class="metric">
+                    <span>被阻斷的連線</span>
+                    <span class="metric-value" id="blocked-connections">0</span>
+                </div>
+                <div class="metric">
+                    <span>安全評分</span>
+                    <span class="metric-value" id="security-score">95%</span>
+                </div>
+            </div>
+
+            <div class="card">
+                <h3>網路監控</h3>
+                <div class="metric">
+                    <span>入站流量</span>
+                    <span class="metric-value" id="inbound-traffic">0 MB/s</span>
+                </div>
+                <div class="metric">
+                    <span>出站流量</span>
+                    <span class="metric-value" id="outbound-traffic">0 MB/s</span>
+                </div>
+                <div class="metric">
+                    <span>延遲</span>
+                    <span class="metric-value" id="latency">0 ms</span>
+                </div>
+                <div class="metric">
+                    <span>活躍會話</span>
+                    <span class="metric-value" id="active-sessions">0</span>
+                </div>
+            </div>
+
+            <div class="card">
+                <h3>系統控制</h3>
+                <p>使用以下控制項管理系統行為</p>
+                <div class="controls">
+                    <button class="btn btn-danger" onclick="blockNetwork()">阻斷網路</button>
+                    <button class="btn btn-success" onclick="unblockNetwork()">解除阻斷</button>
+                    <a href="http://localhost:3000" class="btn btn-primary" target="_blank">Grafana 儀表板</a>
+                    <a href="http://localhost:9090" class="btn btn-primary" target="_blank">Prometheus</a>
+                </div>
+            </div>
+        </div>
+
+        <div class="events">
+            <h3>最近安全事件</h3>
+            <div id="events-container">
+                <div class="loading"></div>
+                載入事件資料中...
+            </div>
+        </div>
+
+        <div class="footer">
+            <p>&copy; 2024 Pandora Box Console IDS-IPS. 版權所有.</p>
+            <p>智慧型網路安全防護系統</p>
+        </div>
+    </div>
+
+    <script>
+        // WebSocket 連接
+        let ws = null;
+        let reconnectInterval = null;
+
+        // 初始化
+        document.addEventListener('DOMContentLoaded', function() {
+            initWebSocket();
+            loadDashboardData();
+            loadEvents();
+            
+            // 定期更新數據
+            setInterval(loadDashboardData, 30000); // 30秒更新一次
+            setInterval(loadEvents, 60000); // 1分鐘更新一次
+        });
+
+        // 初始化 WebSocket
+        function initWebSocket() {
+            const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+            const wsUrl = `${protocol}//${window.location.host}/ws?client_id=dashboard_${Date.now()}`;
+            
+            try {
+                ws = new WebSocket(wsUrl);
+                
+                ws.onopen = function(event) {
+                    console.log('WebSocket 連接已建立');
+                    showAlert('WebSocket 連接成功', 'success');
+                    clearInterval(reconnectInterval);
+                };
+                
+                ws.onmessage = function(event) {
+                    try {
+                        const data = JSON.parse(event.data);
+                        handleWebSocketMessage(data);
+                    } catch (e) {
+                        console.error('解析 WebSocket 訊息失敗:', e);
+                    }
+                };
+                
+                ws.onclose = function(event) {
+                    console.log('WebSocket 連接已關閉');
+                    showAlert('連接中斷，嘗試重新連接...', 'error');
+                    
+                    // 自動重連
+                    reconnectInterval = setInterval(() => {
+                        console.log('嘗試重新連接 WebSocket...');
+                        initWebSocket();
+                    }, 5000);
+                };
+                
+                ws.onerror = function(error) {
+                    console.error('WebSocket 錯誤:', error);
+                };
+                
+                // 定期發送心跳
+                setInterval(() => {
+                    if (ws && ws.readyState === WebSocket.OPEN) {
+                        ws.send(JSON.stringify({type: 'ping'}));
+                    }
+                }, 30000);
+                
+            } catch (e) {
+                console.error('WebSocket 初始化失敗:', e);
+                showAlert('WebSocket 初始化失敗', 'error');
+            }
+        }
+
+        // 處理 WebSocket 訊息
+        function handleWebSocketMessage(data) {
+            switch (data.type) {
+                case 'dashboard_update':
+                    updateDashboard(data.data);
+                    break;
+                case 'network_status':
+                    updateNetworkStatus(data.data);
+                    break;
+                case 'device_status':
+                    updateDeviceStatus(data.data);
+                    break;
+                case 'pong':
+                    // 心跳回應
+                    break;
+                default:
+                    console.log('收到未知訊息類型:', data.type);
+            }
+        }
+
+        // 載入儀表板資料
+        async function loadDashboardData() {
+            try {
+                const response = await fetch('/api/v1/dashboard');
+                if (!response.ok) throw new Error('載入儀表板資料失敗');
+                
+                const data = await response.json();
+                updateDashboard(data);
+            } catch (error) {
+                console.error('載入儀表板資料失敗:', error);
+                showAlert('載入儀表板資料失敗', 'error');
+            }
+        }
+
+        // 更新儀表板
+        function updateDashboard(data) {
+            if (!data) return;
+
+            // 更新系統狀態
+            if (data.system_status) {
+                const status = data.system_status;
+                updateElement('system-status-text', status.status === 'healthy' ? '正常' : '異常');
+                updateStatusIndicator('system-status', status.status === 'healthy');
+                updateElement('uptime', formatUptime(status.uptime));
+                updateStatusIndicator('device-status', status.device_connected);
+                updateElement('device-status-text', status.device_connected ? '已連接' : '未連接');
+                updateStatusIndicator('network-status', !status.network_blocked);
+                updateElement('network-status-text', status.network_blocked ? '已阻斷' : '正常');
+                updateElement('active-sessions', status.active_sessions);
+            }
+
+            // 更新安全指標
+            if (data.security_metrics) {
+                const metrics = data.security_metrics;
+                updateElement('threats-detected', metrics.threats_detected);
+                updateElement('packets-inspected', formatNumber(metrics.packets_inspected));
+                updateElement('blocked-connections', metrics.blocked_connections);
+                updateElement('security-score', metrics.security_score + '%');
+            }
+
+            // 更新網路狀態
+            if (data.network_status) {
+                const network = data.network_status;
+                updateElement('inbound-traffic', formatBytes(network.inbound_traffic) + '/s');
+                updateElement('outbound-traffic', formatBytes(network.outbound_traffic) + '/s');
+                updateElement('latency', network.latency + ' ms');
+            }
+        }
+
+        // 載入事件資料
+        async function loadEvents() {
+            try {
+                const response = await fetch('/api/v1/events?limit=5');
+                if (!response.ok) throw new Error('載入事件資料失敗');
+                
+                const data = await response.json();
+                updateEvents(data.events || []);
+            } catch (error) {
+                console.error('載入事件資料失敗:', error);
+                document.getElementById('events-container').innerHTML = 
+                    '<p style="color: #f56565;">載入事件資料失敗</p>';
+            }
+        }
+
+        // 更新事件顯示
+        function updateEvents(events) {
+            const container = document.getElementById('events-container');
+            
+            if (!events || events.length === 0) {
+                container.innerHTML = '<p style="color: #718096;">目前沒有安全事件</p>';
+                return;
+            }
+
+            const eventsHtml = events.map(event => {
+                const severityClass = event.severity === 'high' ? 'event-high' : 
+                                    event.severity === 'medium' ? 'event-medium' : '';
+                const time = new Date(event.timestamp * 1000).toLocaleString('zh-TW');
+                
+                return `
+                    <div class="event ${severityClass}">
+                        <div class="event-time">${time}</div>
+                        <div><strong>${event.type}</strong> - ${event.message}</div>
+                    </div>
+                `;
+            }).join('');
+
+            container.innerHTML = eventsHtml;
+        }
+
+        // 網路控制函數
+        async function blockNetwork() {
+            try {
+                const response = await fetch('/api/v1/control/network', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({action: 'block'})
+                });
+                
+                if (response.ok) {
+                    showAlert('網路阻斷請求已發送', 'success');
+                } else {
+                    throw new Error('網路阻斷請求失敗');
+                }
+            } catch (error) {
+                console.error('網路阻斷失敗:', error);
+                showAlert('網路阻斷失敗', 'error');
+            }
+        }
+
+        async function unblockNetwork() {
+            try {
+                const response = await fetch('/api/v1/control/network', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({action: 'unblock'})
+                });
+                
+                if (response.ok) {
+                    showAlert('網路解除阻斷請求已發送', 'success');
+                } else {
+                    throw new Error('網路解除阻斷請求失敗');
+                }
+            } catch (error) {
+                console.error('網路解除阻斷失敗:', error);
+                showAlert('網路解除阻斷失敗', 'error');
+            }
+        }
+
+        // 工具函數
+        function updateElement(id, value) {
+            const element = document.getElementById(id);
+            if (element) element.textContent = value;
+        }
+
+        function updateStatusIndicator(id, isOnline) {
+            const element = document.getElementById(id);
+            if (element) {
+                element.className = `status-indicator ${isOnline ? 'status-online' : 'status-offline'}`;
+            }
+        }
+
+        function formatUptime(seconds) {
+            if (!seconds) return '未知';
+            const days = Math.floor(seconds / 86400);
+            const hours = Math.floor((seconds % 86400) / 3600);
+            const minutes = Math.floor((seconds % 3600) / 60);
+            
+            if (days > 0) return `${days}天 ${hours}小時`;
+            if (hours > 0) return `${hours}小時 ${minutes}分鐘`;
+            return `${minutes}分鐘`;
+        }
+
+        function formatNumber(num) {
+            if (num >= 1000000) return (num / 1000000).toFixed(1) + 'M';
+            if (num >= 1000) return (num / 1000).toFixed(1) + 'K';
+            return num.toString();
+        }
+
+        function formatBytes(bytes) {
+            if (bytes >= 1024 * 1024) return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
+            if (bytes >= 1024) return (bytes / 1024).toFixed(1) + ' KB';
+            return bytes + ' B';
+        }
+
+        function showAlert(message, type) {
+            const alertsContainer = document.getElementById('alerts');
+            const alertDiv = document.createElement('div');
+            alertDiv.className = `alert alert-${type}`;
+            alertDiv.textContent = message;
+            
+            alertsContainer.appendChild(alertDiv);
+            
+            // 3秒後自動移除
+            setTimeout(() => {
+                if (alertDiv.parentNode) {
+                    alertDiv.parentNode.removeChild(alertDiv);
+                }
+            }, 3000);
+        }
+    </script>
+</body>
+</html>

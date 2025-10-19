@@ -1,0 +1,107 @@
+-- Security scanning results schema
+
+CREATE TABLE IF NOT EXISTS scan_jobs (
+    id SERIAL PRIMARY KEY,
+    scan_type VARCHAR(50) NOT NULL,
+    target VARCHAR(255) NOT NULL,
+    status VARCHAR(20) NOT NULL,
+    started_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    completed_at TIMESTAMP,
+    created_by VARCHAR(100),
+    metadata JSONB
+);
+
+CREATE TABLE IF NOT EXISTS scan_findings (
+    id SERIAL PRIMARY KEY,
+    scan_job_id INTEGER REFERENCES scan_jobs(id) ON DELETE CASCADE,
+    severity VARCHAR(20) NOT NULL,
+    title VARCHAR(255) NOT NULL,
+    description TEXT,
+    host VARCHAR(255),
+    port INTEGER,
+    protocol VARCHAR(10),
+    cvss_score DECIMAL(3,1),
+    cve_ids TEXT[],
+    remediation TEXT,
+    evidence JSONB,
+    discovered_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    verified BOOLEAN DEFAULT FALSE
+);
+
+CREATE TABLE IF NOT EXISTS nuclei_results (
+    id SERIAL PRIMARY KEY,
+    scan_job_id INTEGER REFERENCES scan_jobs(id) ON DELETE CASCADE,
+    template_id VARCHAR(255) NOT NULL,
+    template_name VARCHAR(255),
+    template_author VARCHAR(255),
+    severity VARCHAR(20),
+    matched_at VARCHAR(500),
+    extracted_results JSONB,
+    curl_command TEXT,
+    matcher_name VARCHAR(255),
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS nmap_results (
+    id SERIAL PRIMARY KEY,
+    scan_job_id INTEGER REFERENCES scan_jobs(id) ON DELETE CASCADE,
+    host VARCHAR(255) NOT NULL,
+    port INTEGER NOT NULL,
+    protocol VARCHAR(10),
+    state VARCHAR(20),
+    service VARCHAR(100),
+    product VARCHAR(255),
+    version VARCHAR(100),
+    extra_info TEXT,
+    os_match VARCHAR(255),
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS amass_results (
+    id SERIAL PRIMARY KEY,
+    scan_job_id INTEGER REFERENCES scan_jobs(id) ON DELETE CASCADE,
+    domain VARCHAR(255) NOT NULL,
+    subdomain VARCHAR(255) NOT NULL,
+    ip_addresses INET[],
+    sources TEXT[],
+    discovered_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE(domain, subdomain)
+);
+
+-- Indexes for performance
+CREATE INDEX idx_scan_findings_severity ON scan_findings(severity);
+CREATE INDEX idx_scan_findings_scan_job ON scan_findings(scan_job_id);
+CREATE INDEX idx_scan_jobs_status ON scan_jobs(status);
+CREATE INDEX idx_scan_jobs_scan_type ON scan_jobs(scan_type);
+CREATE INDEX idx_nuclei_template ON nuclei_results(template_id);
+CREATE INDEX idx_nmap_host_port ON nmap_results(host, port);
+CREATE INDEX idx_amass_domain ON amass_results(domain);
+
+-- Views for reporting
+CREATE OR REPLACE VIEW critical_findings AS
+SELECT 
+    sj.scan_type,
+    sj.target,
+    sf.severity,
+    sf.title,
+    sf.host,
+    sf.port,
+    sf.discovered_at
+FROM scan_findings sf
+JOIN scan_jobs sj ON sf.scan_job_id = sj.id
+WHERE sf.severity IN ('critical', 'high')
+ORDER BY sf.discovered_at DESC;
+
+CREATE OR REPLACE VIEW scan_summary AS
+SELECT 
+    scan_type,
+    COUNT(*) as total_scans,
+    COUNT(CASE WHEN status = 'completed' THEN 1 END) as completed,
+    COUNT(CASE WHEN status = 'failed' THEN 1 END) as failed,
+    COUNT(CASE WHEN status = 'running' THEN 1 END) as running
+FROM scan_jobs
+GROUP BY scan_type;
+
+-- Grant permissions
+GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA public TO sectools;
+GRANT ALL PRIVILEGES ON ALL SEQUENCES IN SCHEMA public TO sectools;

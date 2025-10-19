@@ -1,0 +1,74 @@
+{
+  "dashboard": {
+    "title": "Pandora Box Microservices Overview",
+    "tags": ["microservices", "pandora"],
+    "timezone": "browser",
+    "panels": [
+      {
+        "id": 1,
+        "title": "gRPC Requests Rate",
+        "type": "graph",
+        "targets": [
+          {
+            "expr": "rate(grpc_requests_total[5m])",
+            "legendFormat": "{{service}} - {{method}}"
+          }
+        ]
+      },
+      {
+        "id": 2,
+        "title": "gRPC Request Duration (P99)",
+        "type": "graph",
+        "targets": [
+          {
+            "expr": "histogram_quantile(0.99, rate(grpc_request_duration_seconds_bucket[5m]))",
+            "legendFormat": "{{service}} - {{method}}"
+          }
+        ]
+      },
+      {
+        "id": 3,
+        "title": "Device Active Connections",
+        "type": "stat",
+        "targets": [
+          {
+            "expr": "device_active_connections"
+          }
+        ]
+      },
+      {
+        "id": 4,
+        "title": "Network Packets Rate",
+        "type": "graph",
+        "targets": [
+          {
+            "expr": "rate(network_packets_total[1m])",
+            "legendFormat": "{{protocol}}"
+          }
+        ]
+      },
+      {
+        "id": 5,
+        "title": "Control Active Blocks",
+        "type": "stat",
+        "targets": [
+          {
+            "expr": "control_active_blocks"
+          }
+        ]
+      },
+      {
+        "id": 6,
+        "title": "RabbitMQ Message Rate",
+        "type": "graph",
+        "targets": [
+          {
+            "expr": "rate(rabbitmq_publish_total[5m])",
+            "legendFormat": "{{routing_key}}"
+          }
+        ]
+      }
+    ]
+  }
+}
+

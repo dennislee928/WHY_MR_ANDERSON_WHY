@@ -1,0 +1,60 @@
+# Dockerfile for Network Service
+# 網路服務 Docker 映像
+
+FROM golang:1.21-alpine AS builder
+
+# 安裝必要的工具和 libpcap
+RUN apk add --no-cache git make protobuf-dev libpcap-dev gcc musl-dev
+
+WORKDIR /build
+
+# 複製 go.mod 和 go.sum
+COPY go.mod go.sum ./
+RUN go mod download
+
+# 複製源代碼
+COPY . .
+
+# 生成 proto 代碼
+WORKDIR /build/api/proto
+RUN make install && make generate
+
+# 構建服務
+WORKDIR /build
+RUN CGO_ENABLED=1 GOOS=linux go build -a \
+    -ldflags="-w -s" \
+    -o /app/network-service \
+    ./cmd/network-service
+
+# 最終映像
+FROM alpine:latest
+
+# 安裝運行時依賴
+RUN apk --no-cache add ca-certificates tzdata libpcap
+
+# 創建非 root 用戶
+RUN addgroup -g 1000 pandora && \
+    adduser -D -u 1000 -G pandora pandora
+
+WORKDIR /app
+
+# 從 builder 複製二進制文件
+COPY --from=builder /app/network-service .
+
+# 創建必要的目錄
+RUN mkdir -p /app/data /app/logs && \
+    chown -R pandora:pandora /app
+
+# 注意：網路監控需要特權模式，所以在 docker-compose 中設置
+# USER pandora
+
+# 暴露端口
+EXPOSE 50052 8082
+
+# 健康檢查
+HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
+    CMD wget --no-verbose --tries=1 --spider http://localhost:8082/health || exit 1
+
+# 啟動服務
+ENTRYPOINT ["/app/network-service"]
+

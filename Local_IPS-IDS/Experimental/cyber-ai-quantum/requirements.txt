@@ -1,0 +1,45 @@
+# Pandora Cyber AI/Quantum Security - Python 依賴
+
+# Web 框架
+fastapi==0.109.0
+uvicorn[standard]==0.27.0
+pydantic==2.5.3
+
+# 科學計算
+numpy==1.26.3
+scipy==1.11.4
+
+# 機器學習
+scikit-learn==1.6.1
+
+# HTTP 客戶端
+httpx==0.26.0
+requests==2.32.3
+
+# 消息隊列
+pika==1.3.2
+
+# 日誌
+python-json-logger==2.0.7
+
+# 資料庫
+psycopg2-binary==2.9.9
+redis==5.0.1
+
+# 工具
+python-dotenv==1.0.0
+
+# Zero Trust & Quantum 擴展
+qiskit==1.3.1
+qiskit-aer==0.15.1
+qiskit-ibm-runtime==0.30.0
+qiskit-machine-learning==0.7.2
+qiskit-algorithms==0.3.1
+geopy==2.4.1
+xgboost==2.0.3
+lightgbm==4.1.0
+statsmodels==0.14.1
+
+# Prometheus 監控
+prometheus-client==0.19.0
+

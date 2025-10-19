@@ -1,0 +1,246 @@
+# Pandora Box Console IDS-IPS 告警規則
+groups:
+  - name: pandora.system
+    rules:
+      # 系統運行時間告警
+      - alert: SystemDown
+        expr: up{job="pandora-agent"} == 0
+        for: 1m
+        labels:
+          severity: critical
+          category: system
+        annotations:
+          summary: "Pandora Box Console Agent is down"
+          description: "Pandora Box Console Agent has been down for more than 1 minute."
+
+      # 裝置連接告警
+      - alert: DeviceDisconnected
+        expr: pandora_device_connected == 0
+        for: 2m
+        labels:
+          severity: critical
+          category: device
+        annotations:
+          summary: "IoT Device disconnected"
+          description: "IoT device has been disconnected for more than 2 minutes."
+
+      # 高 CPU 使用率告警
+      - alert: HighCPUUsage
+        expr: (100 - (avg by (instance) (irate(node_cpu_seconds_total{mode="idle"}[5m])) * 100)) > 80
+        for: 5m
+        labels:
+          severity: warning
+          category: system
+        annotations:
+          summary: "High CPU usage detected"
+          description: "CPU usage is above 80% for more than 5 minutes."
+
+      # 高記憶體使用率告警
+      - alert: HighMemoryUsage
+        expr: (1 - (node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes)) * 100 > 85
+        for: 5m
+        labels:
+          severity: warning
+          category: system
+        annotations:
+          summary: "High memory usage detected"
+          description: "Memory usage is above 85% for more than 5 minutes."
+
+      # 磁碟空間不足告警
+      - alert: DiskSpaceLow
+        expr: (1 - (node_filesystem_avail_bytes / node_filesystem_size_bytes)) * 100 > 90
+        for: 5m
+        labels:
+          severity: critical
+          category: system
+        annotations:
+          summary: "Disk space is running low"
+          description: "Disk usage is above 90% on {{ $labels.mountpoint }}."
+
+  - name: pandora.security
+    rules:
+      # 高威脅偵測告警
+      - alert: HighThreatDetection
+        expr: rate(pandora_threats_detected_total{severity="high"}[5m]) > 0.1
+        for: 1m
+        labels:
+          severity: critical
+          category: security
+          threat_type: "{{ $labels.threat_type }}"
+        annotations:
+          summary: "High threat detection rate"
+          description: "High severity threats are being detected at a rate of {{ $value }} per second."
+
+      # 關鍵威脅偵測告警
+      - alert: CriticalThreatDetection
+        expr: rate(pandora_threats_detected_total{severity="critical"}[1m]) > 0
+        for: 0m
+        labels:
+          severity: critical
+          category: security
+          threat_type: "{{ $labels.threat_type }}"
+        annotations:
+          summary: "Critical threat detected"
+          description: "Critical severity threat detected from {{ $labels.source_ip }}."
+
+      # 暴力破解攻擊告警
+      - alert: BruteForceAttack
+        expr: rate(pandora_threats_detected_total{threat_type="brute_force"}[5m]) > 0.05
+        for: 2m
+        labels:
+          severity: high
+          category: security
+          threat_type: "brute_force"
+        annotations:
+          summary: "Brute force attack detected"
+          description: "Brute force attack detected from {{ $labels.source_ip }}."
+
+      # DDoS 攻擊告警
+      - alert: DDoSAttack
+        expr: rate(pandora_threats_detected_total{threat_type="ddos"}[1m]) > 0.1
+        for: 30s
+        labels:
+          severity: critical
+          category: security
+          threat_type: "ddos"
+        annotations:
+          summary: "DDoS attack detected"
+          description: "DDoS attack detected with rate {{ $value }} requests per second."
+
+      # 異常大量連線告警
+      - alert: HighConnectionCount
+        expr: pandora_blocked_connections > 100
+        for: 5m
+        labels:
+          severity: warning
+          category: security
+        annotations:
+          summary: "High number of blocked connections"
+          description: "{{ $value }} connections are currently blocked."
+
+  - name: pandora.network
+    rules:
+      # 網路阻斷狀態告警
+      - alert: NetworkBlocked
+        expr: pandora_network_blocked == 1
+        for: 10m
+        labels:
+          severity: warning
+          category: network
+        annotations:
+          summary: "Network is blocked"
+          description: "Network has been blocked for more than 10 minutes."
+
+      # 網路流量異常告警
+      - alert: HighNetworkTraffic
+        expr: pandora_data_throughput_bytes_per_second > 100000000  # 100MB/s
+        for: 2m
+        labels:
+          severity: warning
+          category: network
+        annotations:
+          summary: "High network traffic detected"
+          description: "Network traffic is {{ $value }} bytes per second in {{ $labels.direction }} direction."
+
+      # PIN 驗證失敗告警
+      - alert: PinValidationFailures
+        expr: rate(pandora_pin_validations_total[5m]) > 0.1 and rate(pandora_network_events_total{status="failed"}[5m]) > 0.05
+        for: 2m
+        labels:
+          severity: warning
+          category: security
+        annotations:
+          summary: "High PIN validation failure rate"
+          description: "PIN validation is failing at a high rate: {{ $value }} failures per second."
+
+      # Token 驗證失敗告警
+      - alert: TokenValidationFailures
+        expr: rate(pandora_token_validations_total[5m]) > 0.1 and rate(pandora_network_events_total{status="failed"}[5m]) > 0.05
+        for: 2m
+        labels:
+          severity: warning
+          category: security
+        annotations:
+          summary: "High token validation failure rate"
+          description: "Token validation is failing at a high rate: {{ $value }} failures per second."
+
+  - name: pandora.performance
+    rules:
+      # 回應時間過長告警
+      - alert: HighResponseTime
+        expr: histogram_quantile(0.95, pandora_response_time_seconds) > 5
+        for: 5m
+        labels:
+          severity: warning
+          category: performance
+        annotations:
+          summary: "High response time detected"
+          description: "95th percentile response time is {{ $value }}s for {{ $labels.operation }}."
+
+      # 活躍會話數過高告警
+      - alert: HighActiveSessions
+        expr: pandora_active_sessions > 50
+        for: 5m
+        labels:
+          severity: warning
+          category: performance
+        annotations:
+          summary: "High number of active sessions"
+          description: "{{ $value }} active sessions detected."
+
+      # 封包檢查率下降告警
+      - alert: LowPacketInspectionRate
+        expr: rate(pandora_packets_inspected_total[5m]) < 100
+        for: 5m
+        labels:
+          severity: warning
+          category: performance
+        annotations:
+          summary: "Low packet inspection rate"
+          description: "Packet inspection rate has dropped to {{ $value }} packets per second."
+
+  - name: pandora.infrastructure
+    rules:
+      # Prometheus 無法抓取指標告警
+      - alert: PrometheusTargetDown
+        expr: up == 0
+        for: 1m
+        labels:
+          severity: warning
+          category: infrastructure
+        annotations:
+          summary: "Prometheus target is down"
+          description: "{{ $labels.job }} target {{ $labels.instance }} has been down for more than 1 minute."
+
+      # Grafana 服務異常告警
+      - alert: GrafanaDown
+        expr: up{job="grafana"} == 0
+        for: 2m
+        labels:
+          severity: warning
+          category: infrastructure
+        annotations:
+          summary: "Grafana is down"
+          description: "Grafana service has been down for more than 2 minutes."
+
+      # Loki 服務異常告警
+      - alert: LokiDown
+        expr: up{job="loki"} == 0
+        for: 2m
+        labels:
+          severity: warning
+          category: infrastructure
+        annotations:
+          summary: "Loki is down"
+          description: "Loki service has been down for more than 2 minutes."
+
+      # AlertManager 服務異常告警
+      - alert: AlertManagerDown
+        expr: up{job="alertmanager"} == 0
+        for: 1m
+        labels:
+          severity: critical
+          category: infrastructure
+        annotations:
+          summary: "AlertManager is down"
+          description: "AlertManager service has been down for more than 1 minute."

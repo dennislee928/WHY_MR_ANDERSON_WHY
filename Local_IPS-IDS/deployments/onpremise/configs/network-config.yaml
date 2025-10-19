@@ -1,0 +1,64 @@
+# yaml-language-server: $schema=
+# Network Service Configuration
+# 網路服務配置
+
+service:
+  name: network-service
+  version: 1.0.0
+
+# gRPC 配置
+grpc:
+  port: 50052
+  max_connections: 100
+  connection_timeout: 30s
+
+# HTTP 健康檢查配置
+http:
+  port: 8082
+  read_timeout: 10s
+  write_timeout: 10s
+
+# 網路監控配置
+network:
+  default_interface: eth0
+  snapshot_length: 1600
+  promiscuous_mode: true
+  timeout: 30s
+  buffer_size: 2097152  # 2MB
+  
+# 流量分析配置
+analysis:
+  enabled: true
+  window_seconds: 60
+  analysis_types:
+    - ddos
+    - port_scan
+    - malware
+    - syn_flood
+  
+# 異常檢測配置
+anomaly_detection:
+  enabled: true
+  threshold: 0.7
+  window_seconds: 300
+  min_packets: 100
+
+# RabbitMQ 配置
+rabbitmq:
+  url: amqp://pandora:pandora123@rabbitmq:5672/
+  exchange: pandora.events
+  connection_timeout: 30s
+  heartbeat_interval: 60s
+
+# 日誌配置
+logging:
+  level: info
+  format: json
+  output: stdout
+
+# 監控配置
+monitoring:
+  enabled: true
+  prometheus_port: 9092
+  health_check_interval: 30s
+

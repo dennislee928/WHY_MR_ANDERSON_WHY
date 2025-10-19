@@ -1,0 +1,28 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: pandora-box
+
+resources:
+  - namespace.yaml
+  - configmap.yaml
+  - secrets.yaml
+  - postgres.yaml
+  - redis.yaml
+  - prometheus.yaml
+  - loki.yaml
+  - grafana.yaml
+  - pandora-backend.yaml
+  - ingress.yaml
+
+images:
+  - name: gcr.io/YOUR_PROJECT_ID/pandora-agent
+    newTag: latest
+  - name: gcr.io/YOUR_PROJECT_ID/pandora-console
+    newTag: latest
+
+commonLabels:
+  app.kubernetes.io/name: pandora-box
+  app.kubernetes.io/version: "1.0.0"
+  app.kubernetes.io/component: ids-ips
+  cloud.provider: gcp

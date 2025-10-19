@@ -1,0 +1,59 @@
+- pipeline: "Kubernetes Deployment"
+  on: "CLICK"
+  priority: "HIGH"
+  actions:
+  
+  # ============================================
+  # Stage 1: 準備 Kubernetes 環境
+  # ============================================
+  - action: "Setup kubectl"
+    type: "BUILD"
+    docker_image_name: "bitnami/kubectl"
+    docker_image_tag: "latest"
+    execute_commands:
+    - "kubectl version --client"
+    - "kubectl cluster-info"
+  
+  # ============================================
+  # Stage 2: 部署微服務
+  # ============================================
+  - action: "Deploy to Kubernetes"
+    type: "BUILD"
+    docker_image_name: "bitnami/kubectl"
+    docker_image_tag: "1.28"
+    execute_commands:
+    - "# Deploy namespace"
+    - "kubectl create namespace pandora-system --dry-run=client -o yaml | kubectl apply -f -"
+    - "# Deploy PostgreSQL StatefulSet"
+    - "kubectl apply -f deployments/kubernetes/postgresql.yaml"
+    - "# Deploy microservices"
+    - "kubectl apply -f deployments/kubernetes/device-service.yaml"
+    - "kubectl apply -f deployments/kubernetes/network-service.yaml"
+    - "kubectl apply -f deployments/kubernetes/control-service.yaml"
+    - "# Wait for rollout"
+    - "kubectl rollout status deployment/device-service -n pandora-system --timeout=300s"
+    - "kubectl rollout status deployment/network-service -n pandora-system --timeout=300s"
+    - "kubectl rollout status deployment/control-service -n pandora-system --timeout=300s"
+    - "# Verify deployment"
+    - "kubectl get pods -n pandora-system"
+    - "kubectl get svc -n pandora-system"
+    - "kubectl get hpa -n pandora-system"
+  
+  # ============================================
+  # Stage 3: 使用 Helm 部署
+  # ============================================
+  - action: "Deploy with Helm"
+    type: "BUILD"
+    docker_image_name: "alpine/helm"
+    docker_image_tag: "latest"
+    execute_commands:
+    - "# Add Helm repos"
+    - "helm repo add bitnami https://charts.bitnami.com/bitnami"
+    - "helm repo add prometheus-community https://prometheus-community.github.io/helm-charts"
+    - "helm repo add grafana https://grafana.github.io/helm-charts"
+    - "helm repo update"
+    - "# Install Pandora Box"
+    - "helm upgrade --install pandora-box ./deployments/helm/pandora-box --namespace pandora-system --create-namespace --wait --timeout 10m"
+    - "# Verify installation"
+    - "helm list -n pandora-system"
+    - "kubectl get pods -n pandora-system"

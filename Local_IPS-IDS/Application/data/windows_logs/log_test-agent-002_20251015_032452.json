@@ -1,0 +1,49 @@
+{
+  "agent_id": "test-agent-002",
+  "hostname": "critical-server",
+  "timestamp": "2025-10-15T10:05:00Z",
+  "received_at": "2025-10-15T03:24:52.016149",
+  "log_count": 6,
+  "features": [
+    0.06,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    1.0
+  ],
+  "risk_score": 0.17666666666666667,
+  "logs": [
+    {
+      "EventID": 4625,
+      "Message": "Failed login attempt 1",
+      "Source": "Security"
+    },
+    {
+      "EventID": 4625,
+      "Message": "Failed login attempt 2",
+      "Source": "Security"
+    },
+    {
+      "EventID": 4625,
+      "Message": "Failed login attempt 3",
+      "Source": "Security"
+    },
+    {
+      "EventID": 1102,
+      "Message": "The audit log was cleared",
+      "Source": "Security"
+    },
+    {
+      "EventID": 4688,
+      "Message": "Process: powershell.exe -enc base64_encoded_command",
+      "Source": "Security"
+    },
+    {
+      "EventID": 7045,
+      "Message": "New service: backdoor.exe",
+      "Source": "System"
+    }
+  ],
+  "metadata": null
+}

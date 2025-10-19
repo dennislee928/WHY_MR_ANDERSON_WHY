@@ -1,0 +1,54 @@
+# Koyeb 部署配置
+# 用於部署 pandora-agent (核心後端) 和 promtail (日誌收集器)
+
+services:
+  # Pandora Agent - 核心後端服務
+  - name: pandora-agent
+    type: docker
+    docker:
+      dockerfile: Dockerfile.agent.koyeb
+    regions:
+      - fra
+    instance_type: nano
+    replicas: 2  # Koyeb 免費方案提供 2 個永不休眠的 Nano 容器
+    ports:
+      - port: 8080
+        protocol: http
+    env:
+      - name: LOG_LEVEL
+        value: info
+      - name: GIN_MODE
+        value: release
+      - name: PORT
+        value: "8080"
+      - name: DATABASE_URL
+        secret: DATABASE_URL
+      - name: REDIS_URL
+        secret: REDIS_URL
+      - name: PROMETHEUS_URL
+        secret: PROMETHEUS_URL
+      - name: LOKI_URL
+        secret: LOKI_URL
+      - name: GRAFANA_URL
+        secret: GRAFANA_URL
+      - name: GRAFANA_API_KEY
+        secret: GRAFANA_API_KEY
+      - name: ENCRYPTION_KEY
+        secret: ENCRYPTION_KEY
+      - name: JWT_SECRET
+        secret: JWT_SECRET
+    healthcheck:
+      http:
+        path: /health
+        port: 8080
+      initial_delay: 30
+      timeout: 10
+      interval: 30
+      restart_limit: 3
+    routes:
+      - path: /
+        port: 8080
+
+  # Promtail - 日誌收集器 (作為 Sidecar 與 Agent 一起部署)
+  # 注意：Koyeb 不直接支援 sidecar，可透過在 Dockerfile 中整合或使用 supervisord
+

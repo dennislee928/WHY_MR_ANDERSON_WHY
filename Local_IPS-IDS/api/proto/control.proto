@@ -1,0 +1,223 @@
+syntax = "proto3";
+
+package pandora.control;
+
+option go_package = "pandora_box_console_ids_ips/api/proto/control";
+
+import "google/protobuf/timestamp.proto";
+import "google/protobuf/empty.proto";
+
+// ControlService manages network control and blocking
+// 控制服務：管理網路控制和阻斷
+service ControlService {
+  // BlockIP blocks an IP address
+  // 阻斷 IP 地址
+  rpc BlockIP(BlockIPRequest) returns (BlockIPResponse);
+
+  // UnblockIP unblocks an IP address
+  // 解除 IP 阻斷
+  rpc UnblockIP(UnblockIPRequest) returns (UnblockIPResponse);
+
+  // BlockPort blocks a port
+  // 阻斷端口
+  rpc BlockPort(BlockPortRequest) returns (BlockPortResponse);
+
+  // UnblockPort unblocks a port
+  // 解除端口阻斷
+  rpc UnblockPort(UnblockPortRequest) returns (UnblockPortResponse);
+
+  // GetBlockList gets the current block list
+  // 獲取當前阻斷列表
+  rpc GetBlockList(BlockListRequest) returns (BlockListResponse);
+
+  // ApplyFirewallRule applies a firewall rule
+  // 應用防火牆規則
+  rpc ApplyFirewallRule(FirewallRuleRequest) returns (FirewallRuleResponse);
+
+  // RemoveFirewallRule removes a firewall rule
+  // 移除防火牆規則
+  rpc RemoveFirewallRule(RemoveRuleRequest) returns (RemoveRuleResponse);
+
+  // GetFirewallRules gets all firewall rules
+  // 獲取所有防火牆規則
+  rpc GetFirewallRules(google.protobuf.Empty) returns (FirewallRulesResponse);
+
+  // GetHealth checks the health of the service
+  // 健康檢查
+  rpc GetHealth(google.protobuf.Empty) returns (HealthResponse);
+}
+
+// BlockIPRequest contains parameters for blocking an IP
+message BlockIPRequest {
+  string ip_address = 1;
+  string reason = 2;
+  int32 duration_seconds = 3;  // 0 = permanent
+  BlockAction action = 4;
+  map<string, string> metadata = 5;
+}
+
+message BlockIPResponse {
+  bool success = 1;
+  string message = 2;
+  string rule_id = 3;
+  google.protobuf.Timestamp expires_at = 4;
+}
+
+// UnblockIPRequest contains parameters for unblocking an IP
+message UnblockIPRequest {
+  string ip_address = 1;
+  string reason = 2;
+}
+
+message UnblockIPResponse {
+  bool success = 1;
+  string message = 2;
+  int32 rules_removed = 3;
+}
+
+// BlockPortRequest contains parameters for blocking a port
+message BlockPortRequest {
+  int32 port = 1;
+  string protocol = 2;      // "tcp", "udp", or "all"
+  string reason = 3;
+  int32 duration_seconds = 4;
+}
+
+message BlockPortResponse {
+  bool success = 1;
+  string message = 2;
+  string rule_id = 3;
+}
+
+// UnblockPortRequest contains parameters for unblocking a port
+message UnblockPortRequest {
+  int32 port = 1;
+  string protocol = 2;
+  string reason = 3;
+}
+
+message UnblockPortResponse {
+  bool success = 1;
+  string message = 2;
+  int32 rules_removed = 3;
+}
+
+// BlockListRequest requests the block list
+message BlockListRequest {
+  BlockType type = 1;
+  bool include_expired = 2;
+  int32 page = 3;
+  int32 page_size = 4;
+}
+
+message BlockListResponse {
+  repeated BlockEntry entries = 1;
+  int32 total_count = 2;
+  int32 active_count = 3;
+}
+
+// FirewallRuleRequest contains a firewall rule to apply
+message FirewallRuleRequest {
+  FirewallRule rule = 1;
+}
+
+message FirewallRuleResponse {
+  bool success = 1;
+  string message = 2;
+  string rule_id = 3;
+}
+
+// RemoveRuleRequest contains parameters for removing a rule
+message RemoveRuleRequest {
+  string rule_id = 1;
+  string reason = 2;
+}
+
+message RemoveRuleResponse {
+  bool success = 1;
+  string message = 2;
+}
+
+// FirewallRulesResponse contains all firewall rules
+message FirewallRulesResponse {
+  repeated FirewallRule rules = 1;
+  int32 total_count = 2;
+}
+
+// HealthResponse contains health information
+message HealthResponse {
+  bool healthy = 1;
+  string status = 2;
+  string version = 3;
+  int64 uptime_seconds = 4;
+  map<string, string> dependencies = 5;
+  ControlServiceMetrics metrics = 6;
+}
+
+// BlockEntry represents a blocked item
+message BlockEntry {
+  string entry_id = 1;
+  BlockType type = 2;
+  string value = 3;           // IP address or port
+  string reason = 4;
+  BlockAction action = 5;
+  google.protobuf.Timestamp created_at = 6;
+  google.protobuf.Timestamp expires_at = 7;
+  bool is_active = 8;
+  string created_by = 9;
+  map<string, string> metadata = 10;
+}
+
+// FirewallRule represents a firewall rule
+message FirewallRule {
+  string rule_id = 1;
+  string name = 2;
+  RuleAction action = 3;
+  string source_ip = 4;
+  string dest_ip = 5;
+  int32 source_port = 6;
+  int32 dest_port = 7;
+  string protocol = 8;
+  string direction = 9;       // "inbound", "outbound", "both"
+  int32 priority = 10;
+  bool enabled = 11;
+  string description = 12;
+  google.protobuf.Timestamp created_at = 13;
+  string created_by = 14;
+}
+
+// BlockType represents the type of block
+enum BlockType {
+  BLOCK_TYPE_UNKNOWN = 0;
+  BLOCK_TYPE_IP = 1;
+  BLOCK_TYPE_PORT = 2;
+  BLOCK_TYPE_IP_PORT = 3;
+}
+
+// BlockAction represents the action to take
+enum BlockAction {
+  BLOCK_ACTION_UNKNOWN = 0;
+  BLOCK_ACTION_DROP = 1;      // 丟棄封包
+  BLOCK_ACTION_REJECT = 2;    // 拒絕並回應
+  BLOCK_ACTION_LOG = 3;       // 只記錄
+}
+
+// RuleAction represents the firewall rule action
+enum RuleAction {
+  RULE_ACTION_UNKNOWN = 0;
+  RULE_ACTION_ALLOW = 1;
+  RULE_ACTION_DENY = 2;
+  RULE_ACTION_LOG = 3;
+}
+
+// ControlServiceMetrics contains service-level metrics
+message ControlServiceMetrics {
+  int64 active_blocks = 1;
+  int64 total_blocks = 2;
+  int64 total_unblocks = 3;
+  int64 active_rules = 4;
+  int64 packets_blocked = 5;
+  double cpu_usage = 6;
+  double memory_usage_mb = 7;
+}
+

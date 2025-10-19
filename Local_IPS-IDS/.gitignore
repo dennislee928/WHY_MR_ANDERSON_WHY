@@ -1,0 +1,90 @@
+# 編譯產物
+bin/
+*.exe
+*.dll
+*.so
+*.dylib
+
+# 測試輸出
+*.test
+*.out
+coverage.txt
+*.prof
+
+# Go 工作區
+go.work
+go.work.sum
+
+# 編輯器和 IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# 環境變數和配置
+.env
+.env.local
+.env.*.local
+*.local.yaml
+secrets/
+
+# 臨時文件
+tmp/
+temp/
+*.tmp
+*.bak
+*.log
+
+# Node.js
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.pnpm-debug.log*
+
+# Next.js
+.next/
+out/
+build/
+dist/
+
+# Terraform
+.terraform/
+*.tfstate
+*.tfstate.*
+.terraform.lock.hcl
+**/terraform/.terraform/
+**/terraform/*.tfstate
+**/terraform/*.tfstate.*
+
+# Docker
+*.dockerignore
+
+# Application specific (On-Premise Build)
+Application/be/bin/
+Application/dist/
+Application/Fe/node_modules/
+Application/Fe/.next/
+Application/Fe/out/
+Application/Fe/.env.local
+Application/Fe/.env.*.local
+Application/Fe/package-lock.json
+
+# Build artifacts and installers
+*.tar.gz
+*.zip
+*.deb
+*.rpm
+*.iso
+*.ova
+installer/
+
+# Additional logs
+Application/*/logs/
+
+# 其他
+internal/security/hardening_fixed.go
+issues.txt
+/Error_Logs

@@ -1,0 +1,75 @@
+# Fly.io 忽略檔案
+# 排除 Next.js 相關檔案，專注於監控系統部署
+
+# Next.js 前端檔案
+package.json
+package-lock.json
+next.config.js
+tailwind.config.js
+tsconfig.json
+vercel.json
+
+# Node.js 相關
+node_modules/
+.npm/
+.yarn/
+
+# Next.js 建置輸出
+.next/
+dist/
+out/
+
+# 忽略任何前端相關檔案
+!cmd/
+!internal/
+!configs/
+!Dockerfile.monitoring
+!Dockerfile.agent*
+!Dockerfile.ui*
+!Dockerfile.nginx
+!go.mod
+!go.sum
+!Makefile
+!scripts/
+!k8s/
+!k8s-gcp/
+
+# 前端原始碼
+web/
+src/
+pages/
+components/
+styles/
+
+# 前端測試
+__tests__/
+*.test.js
+*.test.ts
+*.test.tsx
+*.spec.js
+*.spec.ts
+*.spec.tsx
+
+# 前端配置
+.eslintrc*
+.prettierrc*
+jest.config.*
+
+# 其他前端工具
+.vscode/
+.idea/
+
+# 保留 Go 後端和監控系統檔案
+!cmd/
+!internal/
+!configs/
+!Dockerfile.monitoring
+!Dockerfile.agent*
+!Dockerfile.ui*
+!Dockerfile.nginx
+!go.mod
+!go.sum
+!Makefile
+!scripts/
+!k8s/
+!k8s-gcp/

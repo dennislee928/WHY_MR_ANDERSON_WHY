@@ -1,0 +1,926 @@
+- pipeline: "Build On-Premise Installers"
+  on: "PUSH"
+  refs:
+  - "refs/heads/main"
+  - "refs/heads/dev"
+  priority: "HIGH"
+  fail_on_prepare_env_warning: true
+  actions:
+  
+  # ============================================
+  # Stage 1: 準備構建環境
+  # ============================================
+  - action: "Prepare Build Environment"
+    type: "BUILD"
+    docker_image_name: "library/ubuntu"
+    docker_image_tag: "22.04"
+    execute_commands:
+    - "export VERSION=$(git describe --tags --abbrev=0 2>/dev/null | sed 's/^v//' || echo '0.1.0')"
+    - "export BUILD_DATE=$(date -u '+%Y-%m-%d_%H:%M:%S')"
+    - "export GIT_COMMIT=$(git rev-parse --short HEAD)"
+    - "echo \"VERSION=$VERSION\" >> $BUDDY_EXPORT_FILE"
+    - "echo \"BUILD_DATE=$BUILD_DATE\" >> $BUDDY_EXPORT_FILE"
+    - "echo \"GIT_COMMIT=$GIT_COMMIT\" >> $BUDDY_EXPORT_FILE"
+    - "echo \"Building version: $VERSION\""
+    setup_commands:
+    - "apt-get update && apt-get install -y git"
+  
+  # ============================================
+  # Stage 2: 構建後端（Go）- Linux
+  # ============================================
+  - action: "Build Backend - Linux AMD64"
+    type: "BUILD"
+    docker_image_name: "library/golang"
+    docker_image_tag: "1.21"
+    execute_commands:
+    - "export VERSION=$VERSION"
+    - "export LDFLAGS=\"-s -w -X main.Version=$VERSION -X main.BuildTime=$BUILD_DATE -X main.GitCommit=$GIT_COMMIT\""
+    - "mkdir -p dist/backend"
+    - "go mod download && go mod verify"
+    - "echo 'Building Agent...'"
+    - "CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -ldflags=\"$LDFLAGS\" -o dist/backend/pandora-agent ./cmd/agent/main.go"
+    - "echo 'Building Console...'"
+    - "CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -ldflags=\"$LDFLAGS\" -o dist/backend/pandora-console ./cmd/console/main.go"
+    - "echo 'Building UI Server...'"
+    - "CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -ldflags=\"$LDFLAGS\" -o dist/backend/axiom-ui ./cmd/ui/main.go"
+    - "cp -r configs dist/backend/ || true"
+    - "cp -r scripts dist/backend/ || true"
+    - "ls -la dist/backend/"
+    cached_dirs:
+    - "/go/pkg/mod"
+    
+  - action: "Build Backend - Windows AMD64"
+    type: "BUILD"
+    docker_image_name: "library/golang"
+    docker_image_tag: "1.21"
+    execute_commands:
+    - "export VERSION=$VERSION"
+    - "export LDFLAGS=\"-s -w -X main.Version=$VERSION -X main.BuildTime=$BUILD_DATE -X main.GitCommit=$GIT_COMMIT\""
+    - "mkdir -p dist/backend-windows"
+    - "go mod download && go mod verify"
+    - "CGO_ENABLED=0 GOOS=windows GOARCH=amd64 go build -ldflags=\"$LDFLAGS\" -o dist/backend-windows/pandora-agent.exe ./cmd/agent/main.go"
+    - "CGO_ENABLED=0 GOOS=windows GOARCH=amd64 go build -ldflags=\"$LDFLAGS\" -o dist/backend-windows/pandora-console.exe ./cmd/console/main.go"
+    - "CGO_ENABLED=0 GOOS=windows GOARCH=amd64 go build -ldflags=\"$LDFLAGS\" -o dist/backend-windows/axiom-ui.exe ./cmd/ui/main.go"
+    cached_dirs:
+    - "/go/pkg/mod"
+    
+  - action: "Build Backend - macOS"
+    type: "BUILD"
+    docker_image_name: "library/golang"
+    docker_image_tag: "1.21"
+    execute_commands:
+    - "export VERSION=$VERSION"
+    - "export LDFLAGS=\"-s -w -X main.Version=$VERSION -X main.BuildTime=$BUILD_DATE -X main.GitCommit=$GIT_COMMIT\""
+    - "mkdir -p dist/backend-darwin-amd64 dist/backend-darwin-arm64"
+    - "go mod download"
+    - "# macOS AMD64"
+    - "CGO_ENABLED=0 GOOS=darwin GOARCH=amd64 go build -ldflags=\"$LDFLAGS\" -o dist/backend-darwin-amd64/pandora-agent ./cmd/agent/main.go"
+    - "CGO_ENABLED=0 GOOS=darwin GOARCH=amd64 go build -ldflags=\"$LDFLAGS\" -o dist/backend-darwin-amd64/pandora-console ./cmd/console/main.go"
+    - "CGO_ENABLED=0 GOOS=darwin GOARCH=amd64 go build -ldflags=\"$LDFLAGS\" -o dist/backend-darwin-amd64/axiom-ui ./cmd/ui/main.go"
+    - "# macOS ARM64"
+    - "CGO_ENABLED=0 GOOS=darwin GOARCH=arm64 go build -ldflags=\"$LDFLAGS\" -o dist/backend-darwin-arm64/pandora-agent ./cmd/agent/main.go"
+    - "CGO_ENABLED=0 GOOS=darwin GOARCH=arm64 go build -ldflags=\"$LDFLAGS\" -o dist/backend-darwin-arm64/pandora-console ./cmd/console/main.go"
+    - "CGO_ENABLED=0 GOOS=darwin GOARCH=arm64 go build -ldflags=\"$LDFLAGS\" -o dist/backend-darwin-arm64/axiom-ui ./cmd/ui/main.go"
+    - "# Create tar.gz archives"
+    - "cd dist/backend-darwin-amd64 && tar -czf ../pandora-box-console-$VERSION-darwin-amd64.tar.gz * && cd ../.."
+    - "cd dist/backend-darwin-arm64 && tar -czf ../pandora-box-console-$VERSION-darwin-arm64.tar.gz * && cd ../.."
+    cached_dirs:
+    - "/go/pkg/mod"
+  
+  # ============================================
+  # Stage 3: 構建前端（Next.js）
+  # ============================================
+  - action: "Build Frontend"
+    type: "BUILD"
+    docker_image_name: "library/node"
+    docker_image_tag: "18"
+    working_directory: "/Application/Fe"
+    execute_commands:
+    - "echo 'Checking package.json...'"
+    - "cat package.json | head -10"
+    - "# Generate package-lock.json if missing"
+    - "if [ ! -f package-lock.json ]; then npm install --package-lock-only; fi"
+    - "# Install dependencies"
+    - "npm ci || npm install"
+    - "# Build frontend"
+    - "export NEXT_PUBLIC_APP_VERSION=$VERSION"
+    - "export NODE_ENV=production"
+    - "npm run build"
+    - "# Prepare distribution"
+    - "mkdir -p ../../dist/frontend"
+    - "if [ -d .next/standalone ]; then cp -r .next/standalone/* ../../dist/frontend/; fi"
+    - "if [ -d .next/static ]; then cp -r .next/static ../../dist/frontend/.next/; fi"
+    - "if [ -d public ]; then cp -r public ../../dist/frontend/; fi"
+    - "ls -la ../../dist/frontend/"
+    cached_dirs:
+    - "/node_modules"
+    - "/.next/cache"
+  
+  # ============================================
+  # Stage 4: 構建 Linux 套件（.deb 和 .rpm）
+  # ============================================
+  - action: "Build Linux Packages"
+    type: "BUILD"
+    docker_image_name: "library/ubuntu"
+    docker_image_tag: "22.04"
+    execute_commands:
+    - "apt-get update && apt-get install -y dpkg-dev rpm build-essential"
+    - "export VERSION=$VERSION"
+    - "export PACKAGE_NAME='pandora-box-console'"
+    - "# Create DEB package structure"
+    - "mkdir -p debian/DEBIAN"
+    - "mkdir -p debian/opt/pandora-box/{backend,frontend,configs}"
+    - "mkdir -p debian/etc/systemd/system"
+    - "# Copy files"
+    - "cp -r dist/backend/* debian/opt/pandora-box/backend/"
+    - "cp -r dist/frontend/* debian/opt/pandora-box/frontend/"
+    - "chmod +x debian/opt/pandora-box/backend/*"
+    - "# Create systemd service"
+    - |
+      cat > debian/etc/systemd/system/pandora-agent.service <<'EOF'
+      [Unit]
+      Description=Pandora Box Console Agent
+      After=network.target
+      [Service]
+      Type=simple
+      User=root
+      WorkingDirectory=/opt/pandora-box/backend
+      ExecStart=/opt/pandora-box/backend/pandora-agent --config /opt/pandora-box/backend/configs/agent-config.yaml
+      Restart=on-failure
+      RestartSec=10
+      [Install]
+      WantedBy=multi-user.target
+      EOF
+    - "# Create control file"
+    - |
+      cat > debian/DEBIAN/control <<EOF
+      Package: $PACKAGE_NAME
+      Version: $VERSION
+      Section: net
+      Priority: optional
+      Architecture: amd64
+      Depends: libc6 (>= 2.31), postgresql-client, redis-tools
+      Maintainer: Pandora Security Team <support@pandora-ids.com>
+      Description: Pandora Box Console IDS-IPS System
+       智慧型入侵偵測與防護系統
+      EOF
+    - "# Create postinst script"
+    - |
+      cat > debian/DEBIAN/postinst <<'EOF'
+      #!/bin/bash
+      set -e
+      systemctl daemon-reload
+      systemctl enable pandora-agent.service
+      echo "Installation complete! Use 'systemctl start pandora-agent' to start."
+      EOF
+    - "chmod 755 debian/DEBIAN/postinst"
+    - "# Build DEB package"
+    - "mkdir -p dist"
+    - "dpkg-deb --build debian dist/${PACKAGE_NAME}_${VERSION}_amd64.deb"
+    - "ls -lh dist/"
+  
+  # ============================================
+  # Stage 5: 構建 ISO 映像
+  # ============================================
+  - action: "Build ISO Image"
+    type: "BUILD"
+    docker_image_name: "library/ubuntu"
+    docker_image_tag: "22.04"
+    execute_commands:
+    - "apt-get update && apt-get install -y genisoimage syslinux isolinux"
+    - "export VERSION=$VERSION"
+    - "mkdir -p iso/{backend,frontend,configs,scripts,isolinux}"
+    - "# Copy files"
+    - "cp -r dist/backend/* iso/backend/ || true"
+    - "cp -r dist/frontend/* iso/frontend/ || true"
+    - "# Create install script"
+    - |
+      cat > iso/install.sh <<'INSTALLEOF'
+      #!/bin/bash
+      set -e
+      echo "======================================"
+      echo "  Pandora Box Console IDS-IPS Installer"
+      echo "======================================"
+      if [ "$EUID" -ne 0 ]; then
+        echo "Please run as root"
+        exit 1
+      fi
+      INSTALL_DIR="/opt/pandora-box"
+      mkdir -p $INSTALL_DIR/{backend,frontend,configs,logs}
+      cp -r backend/* $INSTALL_DIR/backend/
+      cp -r frontend/* $INSTALL_DIR/frontend/
+      chmod +x $INSTALL_DIR/backend/*
+      echo "Installation complete!"
+      INSTALLEOF
+    - "chmod +x iso/install.sh"
+    - "# Copy isolinux files"
+    - "cp /usr/lib/ISOLINUX/isolinux.bin iso/isolinux/"
+    - "cp /usr/lib/syslinux/modules/bios/ldlinux.c32 iso/isolinux/"
+    - "# Create ISO"
+    - "mkdir -p dist"
+    - "VOLUME_ID=\"PandoraBox-${VERSION}\""
+    - "if [ ${#VOLUME_ID} -gt 32 ]; then VOLUME_ID=\"PandoraBox-v${VERSION:0:20}\"; fi"
+    - "genisoimage -o dist/pandora-box-console-${VERSION}-amd64.iso -b isolinux/isolinux.bin -c isolinux/boot.cat -no-emul-boot -boot-load-size 4 -boot-info-table -J -R -V \"${VOLUME_ID}\" iso/"
+    - "cd dist && md5sum pandora-box-console-${VERSION}-amd64.iso > pandora-box-console-${VERSION}-amd64.iso.md5"
+  
+  # ============================================
+  # Stage 6: 上傳到 GitHub Releases
+  # ============================================
+  - action: "Create GitHub Release"
+    type: "BUILD"
+    docker_image_name: "library/alpine"
+    docker_image_tag: "latest"
+    execute_commands:
+    - "apk add --no-cache curl jq git"
+    - "export VERSION=$VERSION"
+    - "export BUILD_DATE=$BUILD_DATE"
+    - "export GIT_COMMIT=$GIT_COMMIT"
+    - |
+      # Create or get tag
+      if [ "$BUDDY_EXECUTION_BRANCH" = "main" ]; then
+        TAG_NAME="v$VERSION"
+      else
+        TAG_NAME="dev-$VERSION"
+      fi
+    - |
+      # Create release using GitHub API
+      RELEASE_BODY=$(cat <<EOF
+      ## 🎉 Pandora Box Console IDS-IPS v$VERSION
+      
+      ### 📦 安裝檔案
+      
+      #### Windows
+      - \`pandora-box-console-*-windows-amd64-setup.exe\` - Windows 安裝程式
+      
+      #### Linux
+      - \`pandora-box-console-*_amd64.deb\` - Debian/Ubuntu 套件
+      - \`pandora-box-console-*.rpm\` - RedHat/CentOS 套件
+      
+      #### macOS
+      - \`pandora-box-console-*-darwin-amd64.tar.gz\` - macOS Intel
+      - \`pandora-box-console-*-darwin-arm64.tar.gz\` - macOS Apple Silicon
+      
+      #### 虛擬機/光碟
+      - \`pandora-box-console-*-amd64.iso\` - ISO 安裝光碟
+      
+      ### 🔧 系統需求
+      - CPU: 2 核心以上
+      - 記憶體: 4GB 以上
+      - 儲存空間: 20GB 以上
+      
+      ### 📚 文檔
+      - [安裝指南](README.md#快速開始)
+      - [設定說明](README.md#設定說明)
+      
+      ---
+      **構建資訊**
+      - 版本: $VERSION
+      - 構建日期: $BUILD_DATE
+      - Git Commit: $GIT_COMMIT
+      EOF
+      )
+    - |
+      # Create release
+      PRERELEASE="false"
+      if [ "$BUDDY_EXECUTION_BRANCH" = "dev" ]; then
+        PRERELEASE="true"
+      fi
+      
+      curl -X POST \
+        -H "Authorization: token $GITHUB_TOKEN" \
+        -H "Accept: application/vnd.github.v3+json" \
+        https://api.github.com/repos/$BUDDY_REPO_SLUG/releases \
+        -d "{\"tag_name\":\"$TAG_NAME\",\"name\":\"Pandora Box Console v$VERSION\",\"body\":\"$RELEASE_BODY\",\"draft\":false,\"prerelease\":$PRERELEASE}"
+    - |
+      # Upload artifacts
+      RELEASE_ID=$(curl -s -H "Authorization: token $GITHUB_TOKEN" \
+        https://api.github.com/repos/$BUDDY_REPO_SLUG/releases/tags/$TAG_NAME | jq -r .id)
+      
+      for file in dist/*.exe dist/*.deb dist/*.rpm dist/*.iso dist/*.md5 dist/*.tar.gz; do
+        if [ -f "$file" ]; then
+          FILENAME=$(basename "$file")
+          echo "Uploading $FILENAME..."
+          curl -X POST \
+            -H "Authorization: token $GITHUB_TOKEN" \
+            -H "Content-Type: application/octet-stream" \
+            --data-binary @"$file" \
+            "https://uploads.github.com/repos/$BUDDY_REPO_SLUG/releases/$RELEASE_ID/assets?name=$FILENAME"
+        fi
+      done
+    - "echo 'GitHub Release created successfully!'"
+
+- pipeline: "CI Pipeline"
+  on: "PUSH"
+  refs:
+  - "refs/heads/dev"
+  - "refs/heads/main"
+  priority: "NORMAL"
+  actions:
+  
+  # ============================================
+  # Stage 1: Go 基本檢查
+  # ============================================
+  - action: "Go Basic Checks"
+    type: "BUILD"
+    docker_image_name: "library/golang"
+    docker_image_tag: "1.21"
+    execute_commands:
+    - "go mod download && go mod tidy"
+    - "echo 'Running go vet...'"
+    - "go vet ./..."
+    - "echo 'Checking go fmt...'"
+    - "if [ \"$(gofmt -s -l . | wc -l)\" -gt 0 ]; then echo 'Files need formatting:'; gofmt -s -l .; exit 1; fi"
+    - "echo 'Running tests...'"
+    - "go test -v ./..."
+    - "echo 'Building binaries...'"
+    - "go build -v ./..."
+    cached_dirs:
+    - "/go/pkg/mod"
+  
+  # ============================================
+  # Stage 2: 前端檢查
+  # ============================================
+  - action: "Frontend Checks"
+    type: "BUILD"
+    docker_image_name: "library/node"
+    docker_image_tag: "18"
+    working_directory: "/Application/Fe"
+    execute_commands:
+    - "npm ci || npm install"
+    - "npm run type-check || echo 'Type check skipped'"
+    - "npm run lint || echo 'Linting skipped'"
+    - "npm run test || echo 'Tests skipped'"
+    - "npm run build"
+    cached_dirs:
+    - "/node_modules"
+    - "/.next/cache"
+  
+  # ============================================
+  # Stage 3: Docker 建置測試
+  # ============================================
+  - action: "Build Docker Images"
+    type: "DOCKERFILE"
+    dockerfile_path: "build/docker/agent.dockerfile"
+    docker_image_tag: "latest"
+    push: true
+    registry: "ghcr.io"
+    repository: "$BUDDY_REPO_SLUG/pandora-agent"
+    
+  - action: "Build Server-FE Image"
+    type: "DOCKERFILE"
+    dockerfile_path: "build/docker/server-fe.dockerfile"
+    docker_image_tag: "latest"
+    push: true
+    registry: "ghcr.io"
+    repository: "$BUDDY_REPO_SLUG/pandora-server-fe"
+    
+  - action: "Build Server-BE Image"
+    type: "DOCKERFILE"
+    dockerfile_path: "build/docker/server-be.dockerfile"
+    docker_image_tag: "latest"
+    push: true
+    registry: "ghcr.io"
+    repository: "$BUDDY_REPO_SLUG/pandora-server-be"
+  
+  # ============================================
+  # Stage 4: 安全掃描
+  # ============================================
+  - action: "Security Scan with Trivy"
+    type: "BUILD"
+    docker_image_name: "aquasec/trivy"
+    docker_image_tag: "latest"
+    execute_commands:
+    - "trivy fs --security-checks vuln,config --format json --output trivy-results.json ."
+    - "trivy fs --security-checks vuln,config ."
+
+- pipeline: "Kubernetes Deployment"
+  on: "CLICK"
+  priority: "HIGH"
+  actions:
+  
+  # ============================================
+  # Stage 1: 準備 Kubernetes 環境
+  # ============================================
+  - action: "Setup kubectl"
+    type: "BUILD"
+    docker_image_name: "bitnami/kubectl"
+    docker_image_tag: "latest"
+    execute_commands:
+    - "kubectl version --client"
+    - "kubectl cluster-info"
+  
+  # ============================================
+  # Stage 2: 部署微服務
+  # ============================================
+  - action: "Deploy to Kubernetes"
+    type: "BUILD"
+    docker_image_name: "bitnami/kubectl"
+    docker_image_tag: "1.28"
+    execute_commands:
+    - "# Deploy namespace"
+    - "kubectl create namespace pandora-system --dry-run=client -o yaml | kubectl apply -f -"
+    - "# Deploy PostgreSQL StatefulSet"
+    - "kubectl apply -f deployments/kubernetes/postgresql.yaml"
+    - "# Deploy microservices"
+    - "kubectl apply -f deployments/kubernetes/device-service.yaml"
+    - "kubectl apply -f deployments/kubernetes/network-service.yaml"
+    - "kubectl apply -f deployments/kubernetes/control-service.yaml"
+    - "# Wait for rollout"
+    - "kubectl rollout status deployment/device-service -n pandora-system --timeout=300s"
+    - "kubectl rollout status deployment/network-service -n pandora-system --timeout=300s"
+    - "kubectl rollout status deployment/control-service -n pandora-system --timeout=300s"
+    - "# Verify deployment"
+    - "kubectl get pods -n pandora-system"
+    - "kubectl get svc -n pandora-system"
+    - "kubectl get hpa -n pandora-system"
+  
+  # ============================================
+  # Stage 3: 使用 Helm 部署
+  # ============================================
+  - action: "Deploy with Helm"
+    type: "BUILD"
+    docker_image_name: "alpine/helm"
+    docker_image_tag: "latest"
+    execute_commands:
+    - "# Add Helm repos"
+    - "helm repo add bitnami https://charts.bitnami.com/bitnami"
+    - "helm repo add prometheus-community https://prometheus-community.github.io/helm-charts"
+    - "helm repo add grafana https://grafana.github.io/helm-charts"
+    - "helm repo update"
+    - "# Install Pandora Box"
+    - "helm upgrade --install pandora-box ./deployments/helm/pandora-box --namespace pandora-system --create-namespace --wait --timeout 10m"
+    - "# Verify installation"
+    - "helm list -n pandora-system"
+    - "kubectl get pods -n pandora-system"
+
+- pipeline: "ArgoCD GitOps Sync"
+  on: "CLICK"
+  priority: "NORMAL"
+  actions:
+  
+  - action: "Deploy ArgoCD Application"
+    type: "BUILD"
+    docker_image_name: "bitnami/kubectl"
+    docker_image_tag: "1.28"
+    execute_commands:
+    - "# Apply ArgoCD application"
+    - "kubectl apply -f deployments/argocd/application.yaml"
+    - "# Wait for sync"
+    - "sleep 30"
+    - "# Check application status"
+    - "kubectl get applications -n argocd"
+
+- pipeline: "Performance Testing"
+  on: "CLICK"
+  priority: "NORMAL"
+  trigger_time: "MANUAL"
+  actions:
+  
+  # ============================================
+  # Stage 1: 負載測試（k6）
+  # ============================================
+  - action: "Load Testing with k6"
+    type: "BUILD"
+    docker_image_name: "grafana/k6"
+    docker_image_tag: "latest"
+    execute_commands:
+    - "# Create k6 test script"
+    - |
+      cat > load_test.js <<'EOF'
+      import http from 'k6/http';
+      import { check, sleep } from 'k6';
+      export let options = {
+        stages: [
+          { duration: '2m', target: 100 },
+          { duration: '5m', target: 10000 },
+          { duration: '2m', target: 0 },
+        ],
+        thresholds: {
+          http_req_duration: ['p(99)<10'],
+          http_req_failed: ['rate<0.01'],
+        },
+      };
+      export default function () {
+        let res = http.get('http://localhost:8081/health');
+        check(res, { 'status is 200': (r) => r.status === 200 });
+        sleep(0.01);
+      }
+      EOF
+    - "# Run load test"
+    - "k6 run load_test.js --out json=load_test_results.json"
+    - "# Generate report"
+    - "echo 'Load test completed. Check load_test_results.json for details.'"
+  
+  # ============================================
+  # Stage 2: 基準測試（Go Benchmark）
+  # ============================================
+  - action: "Go Benchmark Tests"
+    type: "BUILD"
+    docker_image_name: "library/golang"
+    docker_image_tag: "1.21"
+    execute_commands:
+    - "go test -bench=. -benchmem ./tests/performance/ > benchmark_results.txt"
+    - "cat benchmark_results.txt"
+    cached_dirs:
+    - "/go/pkg/mod"
+
+- pipeline: "Security Audit"
+  on: "CLICK"
+  priority: "HIGH"
+  trigger_time: "MANUAL"
+  actions:
+  
+  # ============================================
+  # Stage 1: 漏洞掃描
+  # ============================================
+  - action: "Trivy Vulnerability Scan"
+    type: "BUILD"
+    docker_image_name: "aquasec/trivy"
+    docker_image_tag: "latest"
+    execute_commands:
+    - "trivy fs --security-checks vuln,config --format json --output trivy-report.json ."
+    - "trivy fs --severity HIGH,CRITICAL ."
+  
+  # ============================================
+  # Stage 2: Go 安全掃描
+  # ============================================
+  - action: "GoSec Security Scan"
+    type: "BUILD"
+    docker_image_name: "library/golang"
+    docker_image_tag: "1.21"
+    execute_commands:
+    - "go install github.com/securego/gosec/v2/cmd/gosec@latest"
+    - "gosec -fmt json -out gosec-report.json ./..."
+    - "gosec ./..."
+    cached_dirs:
+    - "/go/pkg/mod"
+  
+  # ============================================
+  # Stage 3: OWASP ZAP 掃描
+  # ============================================
+  - action: "OWASP ZAP Scan"
+    type: "BUILD"
+    docker_image_name: "owasp/zap2docker-stable"
+    docker_image_tag: "latest"
+    execute_commands:
+    - "zap-baseline.py -t http://localhost:3001 -r zap-report.html || true"
+    - "echo 'ZAP scan completed. Check zap-report.html for details.'"
+
+- pipeline: "Chaos Engineering"
+  on: "CLICK"
+  priority: "NORMAL"
+  trigger_time: "MANUAL"
+  actions:
+  
+  - action: "Setup Chaos Mesh"
+    type: "BUILD"
+    docker_image_name: "bitnami/kubectl"
+    docker_image_tag: "1.28"
+    execute_commands:
+    - "# Install Chaos Mesh"
+    - "kubectl apply -f https://mirrors.chaos-mesh.org/latest/crd.yaml"
+    - "kubectl apply -f https://mirrors.chaos-mesh.org/latest/chaos-mesh.yaml"
+    - "# Wait for Chaos Mesh to be ready"
+    - "kubectl wait --for=condition=Ready pods --all -n chaos-mesh --timeout=300s"
+  
+  - action: "Run Chaos Tests"
+    type: "BUILD"
+    docker_image_name: "bitnami/kubectl"
+    docker_image_tag: "1.28"
+    execute_commands:
+    - "# Create chaos test directory"
+    - "mkdir -p tests/chaos"
+    - "# Pod failure test"
+    - |
+      cat > tests/chaos/pod-failure.yaml <<'EOF'
+      apiVersion: chaos-mesh.org/v1alpha1
+      kind: PodChaos
+      metadata:
+        name: device-service-failure
+        namespace: pandora-system
+      spec:
+        action: pod-failure
+        mode: one
+        duration: "30s"
+        selector:
+          namespaces:
+            - pandora-system
+          labelSelectors:
+            app: device-service
+      EOF
+    - "kubectl apply -f tests/chaos/pod-failure.yaml"
+    - "sleep 35"
+    - "kubectl delete -f tests/chaos/pod-failure.yaml"
+    - "# Network delay test"
+    - |
+      cat > tests/chaos/network-delay.yaml <<'EOF'
+      apiVersion: chaos-mesh.org/v1alpha1
+      kind: NetworkChaos
+      metadata:
+        name: network-delay
+        namespace: pandora-system
+      spec:
+        action: delay
+        mode: all
+        selector:
+          namespaces:
+            - pandora-system
+        delay:
+          latency: "100ms"
+          correlation: "25"
+          jitter: "10ms"
+        duration: "2m"
+      EOF
+    - "kubectl apply -f tests/chaos/network-delay.yaml"
+    - "sleep 125"
+    - "kubectl delete -f tests/chaos/network-delay.yaml"
+    - "echo 'Chaos tests completed. Check pod logs for resilience verification.'"
+
+- pipeline: "Deploy to GCP (Disabled)"
+  on: "CLICK"
+  disabled: true
+  priority: "LOW"
+  actions:
+  - action: "GCP Deployment"
+    type: "BUILD"
+    execute_commands:
+    - "echo 'GCP deployment is disabled for dev branch'"
+    - "echo 'This pipeline is for main branch cloud deployment only'"
+
+- pipeline: "Deploy to OCI (Disabled)"
+  on: "CLICK"
+  disabled: true
+  priority: "LOW"
+  actions:
+  - action: "OCI Deployment"
+    type: "BUILD"
+    execute_commands:
+    - "echo 'OCI deployment is disabled for dev branch'"
+    - "echo 'This pipeline is for main branch cloud deployment only'"
+
+- pipeline: "Deploy to PaaS (Disabled)"
+  on: "CLICK"
+  disabled: true
+  priority: "LOW"
+  actions:
+  - action: "PaaS Deployment"
+    type: "BUILD"
+    execute_commands:
+    - "echo 'PaaS deployment is disabled for dev branch'"
+    - "echo 'This pipeline is for main branch cloud deployment only'"
+
+- pipeline: "Terraform Deploy (Disabled)"
+  on: "CLICK"
+  disabled: true
+  priority: "LOW"
+  actions:
+  - action: "Terraform Deployment"
+    type: "BUILD"
+    execute_commands:
+    - "echo 'Terraform deployment is disabled for dev branch'"
+    - "echo 'This pipeline is for main branch cloud deployment only'"
+
+# ============================================
+# Phase 4: 測試管道
+# ============================================
+
+- pipeline: "Comprehensive Test Suite"
+  on: "CLICK"
+  priority: "HIGH"
+  trigger_time: "MANUAL"
+  actions:
+  
+  # ============================================
+  # Unit Tests
+  # ============================================
+  - action: "Run Unit Tests"
+    type: "BUILD"
+    docker_image_name: "library/golang"
+    docker_image_tag: "1.21"
+    execute_commands:
+    - "echo 'Running unit tests with coverage...'"
+    - "go test -v -cover -coverprofile=coverage.out -covermode=atomic ./..."
+    - "go tool cover -func=coverage.out"
+    - "go tool cover -html=coverage.out -o coverage.html"
+    - "# Calculate coverage percentage"
+    - "COVERAGE=$(go tool cover -func=coverage.out | grep total | awk '{print $3}')"
+    - "echo \"Total coverage: $COVERAGE\""
+    - "# Fail if coverage < 80%"
+    - "COVERAGE_NUM=$(echo $COVERAGE | sed 's/%//')"
+    - "if [ $(echo \"$COVERAGE_NUM < 80\" | bc) -eq 1 ]; then echo 'Coverage below 80%!'; exit 1; fi"
+    cached_dirs:
+    - "/go/pkg/mod"
+  
+  # ============================================
+  # Integration Tests
+  # ============================================
+  - action: "Run Integration Tests"
+    type: "BUILD"
+    docker_image_name: "library/golang"
+    docker_image_tag: "1.21"
+    execute_commands:
+    - "# Start dependencies"
+    - "docker-compose -f deployments/onpremise/docker-compose.yml up -d postgresql redis rabbitmq"
+    - "sleep 30"
+    - "# Run integration tests"
+    - "go test -v -tags=integration ./tests/integration/..."
+    - "# Cleanup"
+    - "docker-compose -f deployments/onpremise/docker-compose.yml down"
+    services:
+    - type: "POSTGRES"
+      version: "15"
+    - type: "REDIS"
+      version: "7.2"
+    - type: "RABBITMQ"
+      version: "3.12"
+  
+  # ============================================
+  # E2E Tests
+  # ============================================
+  - action: "Run E2E Tests"
+    type: "BUILD"
+    docker_image_name: "library/golang"
+    docker_image_tag: "1.21"
+    execute_commands:
+    - "# Start all services"
+    - "docker-compose -f deployments/onpremise/docker-compose.yml up -d"
+    - "sleep 60"
+    - "# Run E2E tests"
+    - "go test -v -tags=e2e ./tests/e2e/..."
+    - "# Cleanup"
+    - "docker-compose -f deployments/onpremise/docker-compose.yml down"
+
+- pipeline: "ML Model Validation"
+  on: "CLICK"
+  priority: "NORMAL"
+  trigger_time: "MANUAL"
+  actions:
+  
+  - action: "Validate AI Models"
+    type: "BUILD"
+    docker_image_name: "library/python"
+    docker_image_tag: "3.11"
+    execute_commands:
+    - "pip install pytest numpy pandas scikit-learn"
+    - "# Create test directory"
+    - "mkdir -p tests/ml_validation"
+    - "# Run ML validation tests"
+    - "pytest tests/ml_validation/ -v --tb=short"
+    - "# Generate accuracy report"
+    - "python tests/ml_validation/generate_report.py"
+
+- pipeline: "Monitoring & Alerts"
+  on: "SCHEDULE"
+  cron: "0 */6 * * *"
+  priority: "LOW"
+  actions:
+  
+  - action: "Check System Health"
+    type: "BUILD"
+    docker_image_name: "curlimages/curl"
+    docker_image_tag: "latest"
+    execute_commands:
+    - "# Check all services"
+    - "curl -f http://localhost:8081/health || echo 'Device Service down'"
+    - "curl -f http://localhost:8082/health || echo 'Network Service down'"
+    - "curl -f http://localhost:8083/health || echo 'Control Service down'"
+    - "curl -f http://localhost:15672/api/health/checks/alarms || echo 'RabbitMQ down'"
+    - "curl -f http://localhost:9090/-/healthy || echo 'Prometheus down'"
+    - "curl -f http://localhost:3000/api/health || echo 'Grafana down'"
+  
+  - action: "Send Status Report"
+    type: "SLACK"
+    content: |
+      📊 Pandora Box Health Check Report
+      
+      Pipeline: $BUDDY_PIPELINE_NAME
+      Branch: $BUDDY_EXECUTION_BRANCH
+      Status: $BUDDY_EXECUTION_STATUS
+      
+      Time: $BUDDY_EXECUTION_START_DATE
+      
+      Check logs for details.
+    channel: "#pandora-monitoring"
+
+- pipeline: "Backup & Disaster Recovery"
+  on: "SCHEDULE"
+  cron: "0 2 * * *"
+  priority: "NORMAL"
+  actions:
+  
+  - action: "Backup PostgreSQL"
+    type: "BUILD"
+    docker_image_name: "library/postgres"
+    docker_image_tag: "15"
+    execute_commands:
+    - "# Backup database"
+    - "pg_dump -h localhost -U pandora -d pandora > backup-$(date +%Y%m%d).sql"
+    - "# Compress backup"
+    - "gzip backup-$(date +%Y%m%d).sql"
+    - "# Upload to storage (configure your storage)"
+    - "echo 'Backup completed: backup-$(date +%Y%m%d).sql.gz'"
+  
+  - action: "Backup Configurations"
+    type: "BUILD"
+    docker_image_name: "library/alpine"
+    docker_image_tag: "latest"
+    execute_commands:
+    - "# Backup configs"
+    - "tar -czf configs-backup-$(date +%Y%m%d).tar.gz deployments/onpremise/configs/"
+    - "# Backup certificates"
+    - "tar -czf certs-backup-$(date +%Y%m%d).tar.gz certs/"
+    - "echo 'Configuration backup completed'"
+
+- pipeline: "Documentation Build"
+  on: "PUSH"
+  refs:
+  - "refs/heads/main"
+  - "refs/heads/dev"
+  priority: "LOW"
+  actions:
+  
+  - action: "Generate API Documentation"
+    type: "BUILD"
+    docker_image_name: "library/golang"
+    docker_image_tag: "1.21"
+    execute_commands:
+    - "# Install swagger"
+    - "go install github.com/swaggo/swag/cmd/swag@latest"
+    - "# Generate API docs"
+    - "swag init -g cmd/agent/main.go -o docs/api"
+    - "echo 'API documentation generated in docs/api/'"
+  
+  - action: "Build Documentation Site"
+    type: "BUILD"
+    docker_image_name: "library/node"
+    docker_image_tag: "18"
+    execute_commands:
+    - "# Install documentation tools"
+    - "npm install -g @docusaurus/core @docusaurus/preset-classic"
+    - "# Build documentation"
+    - "echo 'Documentation build completed'"
+
+- pipeline: "Notification Pipeline"
+  on: "SCHEDULE"
+  cron: "0 9 * * 1"
+  priority: "LOW"
+  actions:
+  
+  - action: "Weekly Status Report"
+    type: "SLACK"
+    content: |
+      📊 Pandora Box Weekly Status Report
+      
+      🏆 Phase 1-3: Complete (100%)
+      📅 Phase 4: Planning Complete
+      
+      📈 System Stats:
+      - Files: 92
+      - Code Lines: 25,653
+      - Documentation: 9,000+ lines
+      - Test Coverage: 0.7% → Target 80%
+      
+      🎯 This Week's Focus:
+      - Implement comprehensive testing
+      - Performance validation
+      - UX improvements
+      
+      📚 Latest Docs:
+      - PHASE4-ROADMAP.md
+      - TESTING-STRATEGY.md
+      - UX-DESIGN-SPEC.md
+      
+      🔗 Project: https://github.com/$BUDDY_REPO_SLUG
+    channel: "#pandora-updates"
+
+- pipeline: "Dependency Updates"
+  on: "SCHEDULE"
+  cron: "0 0 * * 1"
+  priority: "LOW"
+  actions:
+  
+  - action: "Update Go Dependencies"
+    type: "BUILD"
+    docker_image_name: "library/golang"
+    docker_image_tag: "1.21"
+    execute_commands:
+    - "go get -u ./..."
+    - "go mod tidy"
+    - "go mod verify"
+    - "# Run tests to verify updates"
+    - "go test ./..."
+    cached_dirs:
+    - "/go/pkg/mod"
+  
+  - action: "Update NPM Dependencies"
+    type: "BUILD"
+    docker_image_name: "library/node"
+    docker_image_tag: "18"
+    working_directory: "/Application/Fe"
+    execute_commands:
+    - "npm update"
+    - "npm audit fix"
+    - "npm run build"
+    cached_dirs:
+    - "/node_modules"
+

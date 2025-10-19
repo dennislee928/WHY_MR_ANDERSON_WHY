@@ -1,0 +1,377 @@
+version: '3.8'
+
+services:
+  # ========== 微服務架構 ==========
+  
+  # Device Service - 設備管理
+  device-service:
+    build:
+      context: ../..
+      dockerfile: deployments/onpremise/Dockerfile.device
+    container_name: device-service
+    restart: unless-stopped
+    privileged: true
+    ports:
+      - "50051:50051"  # gRPC
+      - "8081:8081"    # HTTP Health
+    environment:
+      - RABBITMQ_URL=amqp://pandora:pandora123@rabbitmq:5672/
+      - RABBITMQ_EXCHANGE=pandora.events
+      - DEVICE_PORT=/dev/ttyUSB0
+      - LOG_LEVEL=info
+    volumes:
+      - /dev:/dev
+      - ./configs/device-config.yaml:/app/device-config.yaml:ro
+    depends_on:
+      - rabbitmq
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8081/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    networks:
+      - pandora-network
+
+  # Network Service - 網路監控
+  network-service:
+    build:
+      context: ../..
+      dockerfile: deployments/onpremise/Dockerfile.network
+    container_name: network-service
+    restart: unless-stopped
+    network_mode: host
+    cap_add:
+      - NET_ADMIN
+      - NET_RAW
+    environment:
+      - RABBITMQ_URL=amqp://pandora:pandora123@rabbitmq:5672/
+      - RABBITMQ_EXCHANGE=pandora.events
+      - NETWORK_INTERFACE=eth0
+      - LOG_LEVEL=info
+    volumes:
+      - ./configs/network-config.yaml:/app/network-config.yaml:ro
+    depends_on:
+      - rabbitmq
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8082/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # Control Service - 網路控制
+  control-service:
+    build:
+      context: ../..
+      dockerfile: deployments/onpremise/Dockerfile.control
+    container_name: control-service
+    restart: unless-stopped
+    privileged: true
+    network_mode: host
+    cap_add:
+      - NET_ADMIN
+    environment:
+      - RABBITMQ_URL=amqp://pandora:pandora123@rabbitmq:5672/
+      - RABBITMQ_EXCHANGE=pandora.events
+      - FIREWALL_BACKEND=iptables
+      - DEVICE_SERVICE_URL=localhost:50051
+      - NETWORK_SERVICE_URL=localhost:50052
+      - LOG_LEVEL=info
+    volumes:
+      - ./configs/control-config.yaml:/app/control-config.yaml:ro
+    depends_on:
+      - rabbitmq
+      - device-service
+      - network-service
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8083/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # ========== 原有服務（保留用於向後兼容）==========
+  
+  # Pandora Box Console IDS-IPS Agent (Legacy)
+  pandora-agent:
+    build:
+      context: .
+      dockerfile: Dockerfile.agent
+    container_name: pandora-agent
+    restart: unless-stopped
+    privileged: true  # 需要網路管理權限
+    network_mode: host
+    environment:
+      - LOG_LEVEL=info
+      - DEVICE_PORT=/dev/ttyUSB0
+      - GRAFANA_URL=http://grafana:3000
+      - PROMETHEUS_URL=http://prometheus:9090
+      - LOKI_URL=http://loki:3100
+      - MTLS_CERT_PATH=/certs/client.crt
+      - MTLS_KEY_PATH=/certs/client.key
+      - RABBITMQ_URL=amqp://pandora:pandora123@rabbitmq:5672/
+      - RABBITMQ_EXCHANGE=pandora.events
+    volumes:
+      - /dev:/dev
+      - ./certs:/certs:ro
+      - ./configs/agent-config.yaml:/app/agent-config.yaml:ro
+      - pandora-data:/app/data
+    depends_on:
+      - prometheus
+      - loki
+      - grafana
+      - rabbitmq
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # Axiom UI Server
+  axiom-ui:
+    build:
+      context: .
+      dockerfile: Dockerfile.ui
+    container_name: axiom-ui
+    restart: unless-stopped
+    ports:
+      - "3001:3001"
+    environment:
+      - LOG_LEVEL=info
+      - PROMETHEUS_URL=http://prometheus:9090
+      - GRAFANA_URL=http://grafana:3000
+    volumes:
+      - ./web:/app/web:ro
+      - ./configs/ui-config.yaml:/app/ui-config.yaml:ro
+    depends_on:
+      - pandora-agent
+      - prometheus
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3001/api/v1/status"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # Prometheus - 指標收集與儲存
+  prometheus:
+    image: prom/prometheus:v2.47.0
+    container_name: prometheus
+    restart: unless-stopped
+    ports:
+      - "9090:9090"
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--web.console.libraries=/etc/prometheus/console_libraries'
+      - '--web.console.templates=/etc/prometheus/consoles'
+      - '--storage.tsdb.retention.time=30d'
+      - '--web.enable-lifecycle'
+      - '--web.enable-admin-api'
+    volumes:
+      - ./configs/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./configs/prometheus/rules:/etc/prometheus/rules:ro
+      - prometheus-data:/prometheus
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:9090/-/healthy"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # Loki - 日誌聚合
+  loki:
+    image: grafana/loki:2.9.2
+    container_name: loki
+    restart: unless-stopped
+    ports:
+      - "3100:3100"
+    command: -config.file=/etc/loki/local-config.yaml
+    volumes:
+      - ./configs/loki.yaml:/etc/loki/local-config.yaml:ro
+      - loki-data:/loki
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:3100/ready"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # Promtail - 日誌收集器
+  promtail:
+    image: grafana/promtail:2.9.2
+    container_name: promtail
+    restart: unless-stopped
+    volumes:
+      - ./configs/promtail.yaml:/etc/promtail/config.yml:ro
+      - /var/log:/var/log:ro
+      - pandora-data:/app/data:ro
+    command: -config.file=/etc/promtail/config.yml
+    depends_on:
+      - loki
+
+  # Grafana - 視覺化與儀表板
+  grafana:
+    image: grafana/grafana:10.2.0
+    container_name: grafana
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=pandora123
+      - GF_USERS_ALLOW_SIGN_UP=false
+      - GF_INSTALL_PLUGINS=grafana-piechart-panel,grafana-worldmap-panel
+      - GF_FEATURE_TOGGLES_ENABLE=ngalert
+    volumes:
+      - ./configs/grafana/grafana.ini:/etc/grafana/grafana.ini:ro
+      - ./configs/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./configs/grafana/dashboards:/var/lib/grafana/dashboards:ro
+      - grafana-data:/var/lib/grafana
+    depends_on:
+      - prometheus
+      - loki
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3000/api/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # AlertManager - 告警管理
+  alertmanager:
+    image: prom/alertmanager:v0.26.0
+    container_name: alertmanager
+    restart: unless-stopped
+    ports:
+      - "9093:9093"
+    volumes:
+      - ./configs/alertmanager.yml:/etc/alertmanager/alertmanager.yml:ro
+      - alertmanager-data:/alertmanager
+    command:
+      - '--config.file=/etc/alertmanager/alertmanager.yml'
+      - '--storage.path=/alertmanager'
+      - '--web.external-url=http://localhost:9093'
+    depends_on:
+      - prometheus
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:9093/-/healthy"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # Node Exporter - 系統指標收集
+  node-exporter:
+    image: prom/node-exporter:v1.6.1
+    container_name: node-exporter
+    restart: unless-stopped
+    ports:
+      - "9100:9100"
+    command:
+      - '--path.procfs=/host/proc'
+      - '--path.sysfs=/host/sys'
+      - '--collector.filesystem.mount-points-exclude=^/(sys|proc|dev|host|etc)($$|/)'
+    volumes:
+      - /proc:/host/proc:ro
+      - /sys:/host/sys:ro
+      - /:/rootfs:ro
+
+  # Redis - 快取與會話儲存
+  redis:
+    image: redis:7.2-alpine
+    container_name: redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    command: redis-server --appendonly yes --requirepass pandora123
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "--raw", "incr", "ping"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # PostgreSQL - 關聯式資料庫
+  postgres:
+    image: postgres:15-alpine
+    container_name: postgres
+    restart: unless-stopped
+    ports:
+      - "5432:5432"
+    environment:
+      - POSTGRES_DB=pandora
+      - POSTGRES_USER=pandora
+      - POSTGRES_PASSWORD=pandora123
+    volumes:
+      - ./configs/postgres/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U pandora"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # RabbitMQ - 消息隊列
+  rabbitmq:
+    image: rabbitmq:3.12-management-alpine
+    container_name: rabbitmq
+    restart: unless-stopped
+    ports:
+      - "5672:5672"   # AMQP 協議端口
+      - "15672:15672" # 管理界面端口
+    environment:
+      - RABBITMQ_DEFAULT_USER=pandora
+      - RABBITMQ_DEFAULT_PASS=pandora123
+      - RABBITMQ_DEFAULT_VHOST=/
+      - RABBITMQ_SERVER_ADDITIONAL_ERL_ARGS=-rabbit log_levels [{connection,error},{default,warning}]
+    volumes:
+      - ./configs/rabbitmq/rabbitmq.conf:/etc/rabbitmq/rabbitmq.conf:ro
+      - ./configs/rabbitmq/definitions.json:/etc/rabbitmq/definitions.json:ro
+      - rabbitmq-data:/var/lib/rabbitmq
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # Nginx - 反向代理
+  nginx:
+    image: nginx:1.25-alpine
+    container_name: nginx
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./configs/nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./configs/nginx/ssl:/etc/nginx/ssl:ro
+      - ./web/static:/var/www/static:ro
+    depends_on:
+      - grafana
+      - axiom-ui
+      - prometheus
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+volumes:
+  pandora-data:
+    driver: local
+  prometheus-data:
+    driver: local
+  loki-data:
+    driver: local
+  grafana-data:
+    driver: local
+  alertmanager-data:
+    driver: local
+  redis-data:
+    driver: local
+  postgres-data:
+    driver: local
+  rabbitmq-data:
+    driver: local
+
+networks:
+  default:
+    name: pandora-network
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.20.0.0/16

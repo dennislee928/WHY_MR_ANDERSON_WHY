@@ -1,0 +1,56 @@
+# Koyeb 官方配置格式
+# 參考: https://www.koyeb.com/docs/reference/koyeb-config-file
+
+app:
+  name: pandora-agent
+
+services:
+  - name: pandora-agent
+    
+    # 建置配置
+    build:
+      type: dockerfile
+      dockerfile: Dockerfile.agent.koyeb
+      context: .
+      target: ""
+    
+    # 部署配置
+    regions:
+      - fra
+    
+    # 實例類型
+    instance_type: nano
+    
+    # 擴展配置
+    scaling:
+      min: 1
+      max: 2
+    
+    # 端口配置
+    ports:
+      - port: 8080
+        protocol: http
+    
+    # 路由配置
+    routes:
+      - path: /
+        port: 8080
+    
+    # 健康檢查
+    health_checks:
+      - type: http
+        port: 8080
+        path: /health
+        interval: 30s
+        timeout: 10s
+        grace_period: 30s
+    
+    # 環境變數
+    env:
+      - key: LOG_LEVEL
+        value: info
+      - key: GIN_MODE
+        value: release
+      - key: PORT
+        value: "8080"
+

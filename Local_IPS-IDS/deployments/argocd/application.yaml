@@ -1,0 +1,98 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: pandora-box
+  namespace: argocd
+  labels:
+    app: pandora-box
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: default
+  
+  source:
+    repoURL: https://github.com/your-org/pandora-box.git
+    targetRevision: main
+    path: deployments/helm/pandora-box
+    helm:
+      releaseName: pandora-box
+      valueFiles:
+        - values.yaml
+      parameters:
+        - name: deviceService.replicaCount
+          value: "2"
+        - name: networkService.replicaCount
+          value: "3"
+        - name: controlService.replicaCount
+          value: "2"
+  
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: pandora-system
+  
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+      allowEmpty: false
+    syncOptions:
+      - CreateNamespace=true
+      - PrunePropagationPolicy=foreground
+      - PruneLast=true
+    retry:
+      limit: 5
+      backoff:
+        duration: 5s
+        factor: 2
+        maxDuration: 3m
+  
+  ignoreDifferences:
+    - group: apps
+      kind: Deployment
+      jsonPointers:
+        - /spec/replicas
+  
+  revisionHistoryLimit: 10
+
+---
+apiVersion: argoproj.io/v1alpha1
+kind: AppProject
+metadata:
+  name: pandora-box-project
+  namespace: argocd
+spec:
+  description: Pandora Box Console IDS-IPS Project
+  
+  sourceRepos:
+    - https://github.com/your-org/pandora-box.git
+  
+  destinations:
+    - namespace: pandora-system
+      server: https://kubernetes.default.svc
+    - namespace: pandora-monitoring
+      server: https://kubernetes.default.svc
+  
+  clusterResourceWhitelist:
+    - group: '*'
+      kind: '*'
+  
+  namespaceResourceWhitelist:
+    - group: '*'
+      kind: '*'
+  
+  roles:
+    - name: admin
+      description: Admin privileges
+      policies:
+        - p, proj:pandora-box-project:admin, applications, *, pandora-box-project/*, allow
+      groups:
+        - pandora-admins
+    
+    - name: developer
+      description: Developer privileges
+      policies:
+        - p, proj:pandora-box-project:developer, applications, get, pandora-box-project/*, allow
+        - p, proj:pandora-box-project:developer, applications, sync, pandora-box-project/*, allow
+      groups:
+        - pandora-developers
+

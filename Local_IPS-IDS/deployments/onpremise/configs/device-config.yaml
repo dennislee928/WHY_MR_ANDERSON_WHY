@@ -1,0 +1,49 @@
+# Device Service Configuration
+# 設備服務配置
+
+service:
+  name: device-service
+  version: 1.0.0
+  
+# gRPC 配置
+grpc:
+  port: 50051
+  max_connections: 100
+  connection_timeout: 30s
+  
+# HTTP 健康檢查配置
+http:
+  port: 8081
+  read_timeout: 10s
+  write_timeout: 10s
+
+# 設備配置
+device:
+  default_port: /dev/ttyUSB0
+  default_baud_rate: 115200
+  read_timeout: 30s
+  write_timeout: 10s
+  reconnect_delay: 5s
+  max_reconnect_attempts: 10
+
+# RabbitMQ 配置
+rabbitmq:
+  url: amqp://pandora:pandora123@rabbitmq:5672/
+  exchange: pandora.events
+  connection_timeout: 30s
+  heartbeat_interval: 60s
+  reconnect_delay: 5s
+  max_reconnect_attempts: 10
+
+# 日誌配置
+logging:
+  level: info
+  format: json
+  output: stdout
+
+# 監控配置
+monitoring:
+  enabled: true
+  prometheus_port: 9091
+  health_check_interval: 30s
+

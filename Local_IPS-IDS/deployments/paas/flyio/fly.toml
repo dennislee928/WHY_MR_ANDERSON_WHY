@@ -1,0 +1,30 @@
+# Fly.io 監控系統配置檔案
+# 修復 TOML 格式問題
+
+app = "pandora-monitoring"
+primary_region = "nrt"
+
+[build]
+  dockerfile = "Dockerfile.monitoring"
+
+[env]
+  LOG_LEVEL = "info"
+  TZ = "Asia/Taipei"
+
+[http_service]
+  internal_port = 80
+  force_https = true
+  auto_stop_machines = false
+  auto_start_machines = true
+  min_machines_running = 1
+
+  [http_service.concurrency]
+    type = "connections"
+    hard_limit = 1000
+    soft_limit = 500
+
+# 持久化儲存 (單一 Volume 用於所有數據)
+[[mounts]]
+  source = "monitoring_data"
+  destination = "/data"
+  size_gb = 3

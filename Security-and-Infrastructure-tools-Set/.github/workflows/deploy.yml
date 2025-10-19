@@ -1,0 +1,71 @@
+name: Deploy to Kubernetes
+
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Deployment environment'
+        required: true
+        default: 'staging'
+        type: choice
+        options:
+        - staging
+        - production
+      namespace:
+        description: 'Kubernetes namespace'
+        required: true
+        default: 'security-tools'
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    name: Deploy Security Tools
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Set up kubectl
+      uses: azure/setup-kubectl@v3
+      with:
+        version: 'v1.28.0'
+        
+    - name: Configure kubectl
+      run: |
+        echo "${{ secrets.KUBE_CONFIG }}" | base64 -d > kubeconfig
+        export KUBECONFIG=kubeconfig
+        
+    - name: Deploy to Kubernetes
+      run: |
+        export KUBECONFIG=kubeconfig
+        
+        # 創建命名空間
+        kubectl apply -f k8s/namespaces.yaml
+        
+        # 部署配置
+        kubectl apply -f k8s/configmap.yaml
+        kubectl apply -f k8s/secrets.yaml
+        
+        # 部署 ArgoCD
+        kubectl create namespace argocd --dry-run=client -o yaml | kubectl apply -f -
+        kubectl apply -n argocd -f https://raw.githubusercontent.com/argoproj/argo-cd/stable/manifests/install.yaml
+        kubectl apply -f k8s/argocd-service.yaml
+        
+        # 部署 SecureCodeBox
+        kubectl apply -f k8s/securecodebox-rbac.yaml
+        kubectl apply -f k8s/securecodebox-operator.yaml
+        
+        # 部署 Parser 服務
+        kubectl apply -f k8s/parser-nuclei.yaml
+        kubectl apply -f k8s/parser-amass.yaml
+        
+    - name: Verify deployment
+      run: |
+        export KUBECONFIG=kubeconfig
+        kubectl get pods -n security-tools
+        kubectl get pods -n argocd
+        
+    - name: Get ArgoCD password
+      run: |
+        export KUBECONFIG=kubeconfig
+        kubectl -n argocd get secret argocd-initial-admin-secret -o jsonpath="{.data.password}" | base64 -d
