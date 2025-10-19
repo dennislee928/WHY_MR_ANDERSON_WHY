@@ -105,6 +105,12 @@ pipeline:
               connectorRef: kubernetes_connector
               namespace: harness-builds
               automountServiceAccountToken: true
+        failureStrategies:
+          - onFailure:
+              errors:
+                - AllErrors
+              action:
+                type: Abort
     
     # Stage 2: Build Docker Images
     - stage:
@@ -161,6 +167,12 @@ pipeline:
             spec:
               connectorRef: kubernetes_connector
               namespace: harness-builds
+        failureStrategies:
+          - onFailure:
+              errors:
+                - AllErrors
+              action:
+                type: Abort
     
     # Stage 3: Deploy to Cloudflare
     - stage:
@@ -219,6 +231,12 @@ pipeline:
             deployToAll: false
             infrastructureDefinitions:
               - identifier: cloudflare_infra
+        failureStrategies:
+          - onFailure:
+              errors:
+                - AllErrors
+              action:
+                type: StageRollback
     
     # Stage 4: Deploy to OCI
     - stage:
@@ -290,6 +308,12 @@ pipeline:
             deployToAll: false
             infrastructureDefinitions:
               - identifier: oci_kubernetes
+        failureStrategies:
+          - onFailure:
+              errors:
+                - AllErrors
+              action:
+                type: StageRollback
     
     # Stage 5: Deploy to IBM Cloud
     - stage:
@@ -342,6 +366,12 @@ pipeline:
             deployToAll: false
             infrastructureDefinitions:
               - identifier: ibm_infra
+        failureStrategies:
+          - onFailure:
+              errors:
+                - AllErrors
+              action:
+                type: StageRollback
     
     # Stage 6: Post-Deployment Verification
     - stage:
@@ -391,6 +421,12 @@ pipeline:
                           curl -f https://security-platform-api.mybluemix.net/api/v1/health || exit 1
                           
                           echo "All health checks passed!"
+        failureStrategies:
+          - onFailure:
+              errors:
+                - AllErrors
+              action:
+                type: Ignore
   
   variables:
     - name: deployment_strategy
