@@ -1,0 +1,38 @@
+{
+  "name": "security-platform-cloudflare-worker",
+  "version": "1.0.0",
+  "description": "Cloudflare Workers deployment for Security Platform",
+  "main": "src/index.js",
+  "scripts": {
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy",
+    "deploy:staging": "wrangler deploy --env staging",
+    "deploy:production": "wrangler deploy --env production",
+    "tail": "wrangler tail",
+    "d1:create": "wrangler d1 create security_platform_db",
+    "d1:init": "wrangler d1 execute security_platform_db --file=schema.sql",
+    "d1:query": "wrangler d1 execute security_platform_db --command",
+    "kv:create:cache": "wrangler kv:namespace create CACHE",
+    "kv:create:sessions": "wrangler kv:namespace create SESSIONS",
+    "test": "vitest",
+    "build": "esbuild src/index.js --bundle --format=esm --outfile=dist/index.js"
+  },
+  "keywords": [
+    "cloudflare-workers",
+    "security",
+    "ids",
+    "ips"
+  ],
+  "author": "Security Team",
+  "license": "MIT",
+  "dependencies": {
+    "itty-router": "^4.0.0"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^4.20240000.0",
+    "esbuild": "^0.19.0",
+    "vitest": "^1.0.0",
+    "wrangler": "^3.20.0"
+  }
+}
+

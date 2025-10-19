@@ -1,0 +1,236 @@
+# Docker Compose 測試環境配置
+version: '3.8'
+
+services:
+  # 測試用 Pandora Agent
+  pandora-agent-test:
+    build:
+      context: .
+      dockerfile: Dockerfile.agent
+    container_name: pandora-agent-test
+    restart: "no"
+    environment:
+      - LOG_LEVEL=error
+      - DEVICE_PORT=/dev/null  # 測試環境不需要實際裝置
+      - GRAFANA_URL=http://grafana-test:3000
+      - PROMETHEUS_URL=http://prometheus-test:9090
+      - LOKI_URL=http://loki-test:3100
+      - ENVIRONMENT=test
+    ports:
+      - "8080:8080"
+    volumes:
+      - ./configs/agent-config.yaml:/app/agent-config.yaml:ro
+      - test-data:/app/data
+    depends_on:
+      - prometheus-test
+      - loki-test
+      - grafana-test
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+
+  # 測試用 Axiom UI
+  axiom-ui-test:
+    build:
+      context: .
+      dockerfile: Dockerfile.ui
+    container_name: axiom-ui-test
+    restart: "no"
+    ports:
+      - "3001:3001"
+    environment:
+      - LOG_LEVEL=error
+      - PROMETHEUS_URL=http://prometheus-test:9090
+      - GRAFANA_URL=http://grafana-test:3000
+      - ENVIRONMENT=test
+    volumes:
+      - ./web:/app/web:ro
+      - ./configs/ui-config.yaml:/app/ui-config.yaml:ro
+    depends_on:
+      - pandora-agent-test
+      - prometheus-test
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3001/api/v1/status"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+
+  # 測試用 Prometheus
+  prometheus-test:
+    image: prom/prometheus:v2.47.0
+    container_name: prometheus-test
+    restart: "no"
+    ports:
+      - "9090:9090"
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--web.console.libraries=/etc/prometheus/console_libraries'
+      - '--web.console.templates=/etc/prometheus/consoles'
+      - '--storage.tsdb.retention.time=1d'  # 測試環境縮短保留時間
+      - '--web.enable-lifecycle'
+      - '--web.enable-admin-api'
+      - '--log.level=error'  # 減少日誌輸出
+    volumes:
+      - ./configs/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - test-prometheus-data:/prometheus
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:9090/-/healthy"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+
+  # 測試用 Loki
+  loki-test:
+    image: grafana/loki:2.9.2
+    container_name: loki-test
+    restart: "no"
+    ports:
+      - "3100:3100"
+    command: -config.file=/etc/loki/local-config.yaml
+    volumes:
+      - ./configs/loki.yaml:/etc/loki/local-config.yaml:ro
+      - test-loki-data:/loki
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:3100/ready"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+
+  # 測試用 Grafana
+  grafana-test:
+    image: grafana/grafana:10.2.0
+    container_name: grafana-test
+    restart: "no"
+    ports:
+      - "3000:3000"
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=test123
+      - GF_USERS_ALLOW_SIGN_UP=false
+      - GF_LOG_LEVEL=error
+      - GF_ANALYTICS_REPORTING_ENABLED=false
+      - GF_ANALYTICS_CHECK_FOR_UPDATES=false
+      - GF_INSTALL_PLUGINS=
+    volumes:
+      - ./configs/grafana/grafana.ini:/etc/grafana/grafana.ini:ro
+      - test-grafana-data:/var/lib/grafana
+    depends_on:
+      - prometheus-test
+      - loki-test
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3000/api/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+
+  # 測試用 AlertManager
+  alertmanager-test:
+    image: prom/alertmanager:v0.26.0
+    container_name: alertmanager-test
+    restart: "no"
+    ports:
+      - "9093:9093"
+    volumes:
+      - ./configs/alertmanager.yml:/etc/alertmanager/alertmanager.yml:ro
+      - test-alertmanager-data:/alertmanager
+    command:
+      - '--config.file=/etc/alertmanager/alertmanager.yml'
+      - '--storage.path=/alertmanager'
+      - '--web.external-url=http://localhost:9093'
+      - '--log.level=error'
+    depends_on:
+      - prometheus-test
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:9093/-/healthy"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+
+  # 測試用 Redis (簡化版)
+  redis-test:
+    image: redis:7.2-alpine
+    container_name: redis-test
+    restart: "no"
+    ports:
+      - "6379:6379"
+    command: redis-server --appendonly no --save ""  # 測試環境不需要持久化
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+
+  # 測試用 PostgreSQL (簡化版)
+  postgres-test:
+    image: postgres:15-alpine
+    container_name: postgres-test
+    restart: "no"
+    ports:
+      - "5432:5432"
+    environment:
+      - POSTGRES_DB=pandora_test
+      - POSTGRES_USER=test_user
+      - POSTGRES_PASSWORD=test_pass
+    volumes:
+      - test-postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U test_user"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+
+  # 測試執行器
+  test-runner:
+    build:
+      context: .
+      dockerfile: Dockerfile.test
+    container_name: test-runner
+    restart: "no"
+    environment:
+      - AXIOM_UI_URL=http://axiom-ui-test:3001
+      - METRICS_URL=http://pandora-agent-test:8080
+      - PROMETHEUS_URL=http://prometheus-test:9090
+      - GRAFANA_URL=http://grafana-test:3000
+      - LOKI_URL=http://loki-test:3100
+    volumes:
+      - .:/workspace:ro
+      - test-results:/test-results
+    depends_on:
+      - pandora-agent-test
+      - axiom-ui-test
+      - prometheus-test
+      - loki-test
+      - grafana-test
+    command: ["go", "test", "-v", "-tags=integration", "./test/integration/..."]
+
+volumes:
+  test-data:
+    driver: local
+  test-prometheus-data:
+    driver: local
+  test-loki-data:
+    driver: local
+  test-grafana-data:
+    driver: local
+  test-alertmanager-data:
+    driver: local
+  test-postgres-data:
+    driver: local
+  test-results:
+    driver: local
+
+networks:
+  default:
+    name: pandora-test-network
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.21.0.0/16

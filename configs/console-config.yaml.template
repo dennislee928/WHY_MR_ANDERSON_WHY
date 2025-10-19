@@ -1,0 +1,128 @@
+# Pandora Box Console 配置檔案模板
+# 版本: 1.0.0
+
+# 服務器設定
+server:
+  port: 3001                    # HTTP服務器埠號
+  timeout: "30s"               # HTTP請求超時時間
+  read_timeout: "30s"          # 讀取超時
+  write_timeout: "30s"         # 寫入超時
+  idle_timeout: "60s"          # 空閒超時
+
+# 認證設定
+auth:
+  default_psk: "pandora-default-key"    # 預設預共享金鑰 - 請更改！
+  
+  # PC特定的預共享金鑰
+  pc_keys:
+    "PC-WORKSTATION-001": "secure-key-1"
+    "PC-WORKSTATION-002": "secure-key-2"
+  
+  # 時間戳驗證窗口 (秒)
+  timestamp_window: 300
+  
+  # TPM挑戰設定
+  tpm:
+    enabled: false              # 是否啟用TPM認證
+    challenge_expiry: "5m"      # 挑戰過期時間
+    key_size: 2048             # RSA金鑰大小
+
+# mTLS設定
+mtls:
+  enabled: false                # 是否啟用mTLS
+  cert_file: "certs/server.crt" # 服務器憑證
+  key_file: "certs/server.key"  # 服務器私鑰
+  ca_file: "certs/ca.crt"      # CA憑證 (用於驗證客戶端)
+
+# 日誌設定
+logging:
+  level: "info"                 # 日誌等級: debug, info, warn, error
+  format: "json"               # 日誌格式: json, text
+  file: ""                     # 日誌檔案 (留空為stdout)
+  
+  # 中央日誌收集
+  central_logging:
+    enabled: true
+    loki_url: "http://loki:3100"
+    retention: "30d"
+
+# 監控設定
+monitoring:
+  enabled: true                 # 是否啟用監控
+  prometheus:
+    enabled: true
+    metrics_path: "/metrics"
+    port: 9090
+  
+  grafana:
+    enabled: true
+    url: "http://grafana:3000"
+    dashboard_refresh: "30s"
+
+# 資料庫設定 (可選 - 用於儲存日誌和統計)
+database:
+  enabled: false               # 是否使用資料庫
+  type: "postgresql"          # 資料庫類型
+  host: "localhost"
+  port: 5432
+  name: "pandora_console"
+  username: "pandora"
+  password: ""                # 從環境變數 PANDORA_DB_PASSWORD 讀取
+  
+  # 連接池設定
+  max_open_conns: 25
+  max_idle_conns: 5
+  conn_max_lifetime: "1h"
+
+# Redis設定 (用於挑戰快取)
+redis:
+  enabled: false               # 是否使用Redis
+  addr: "localhost:6379"       # Redis地址
+  password: ""                # Redis密碼
+  db: 0                       # Redis資料庫編號
+
+# 安全設定
+security:
+  # API限流
+  rate_limiting:
+    enabled: true
+    requests_per_minute: 60
+    burst_size: 10
+  
+  # IP白名單 (可選)
+  ip_whitelist:
+    enabled: false
+    allowed_ips:
+      - "127.0.0.1"
+      - "192.168.1.0/24"
+  
+  # 暴力破解防護
+  brute_force_protection:
+    enabled: true
+    max_failures: 5           # 最大失敗次數
+    lockout_duration: "15m"   # 鎖定時間
+
+# 通知設定 (可選)
+notifications:
+  enabled: false
+  
+  # Email通知
+  email:
+    enabled: false
+    smtp_server: "smtp.gmail.com"
+    smtp_port: 587
+    username: ""
+    password: ""              # 從環境變數讀取
+    from: "pandora@example.com"
+    to: ["admin@example.com"]
+  
+  # Slack通知
+  slack:
+    enabled: false
+    webhook_url: ""           # Slack Webhook URL
+    channel: "#security-alerts"
+
+# 環境變數對應
+# 所有設定都可以透過環境變數覆蓋，格式為 PANDORA_CONSOLE_<SECTION>_<KEY>
+# 例如: PANDORA_CONSOLE_SERVER_PORT=3002, PANDORA_CONSOLE_AUTH_DEFAULT_PSK=newsecret
+

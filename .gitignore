@@ -1,1 +1,86 @@
-decision.txt
+# Project-specific excludes
+Sext-Adventure/
+personal-publicdata/
+
+# Old project directories (backup only)
+Local_IPS-IDS/
+Security-and-Infrastructure-tools-Set/
+
+# Build artifacts
+*.exe
+*.dll
+*.so
+*.dylib
+*.test
+*.out
+dist/
+build/
+bin/
+
+# Dependencies
+node_modules/
+vendor/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+venv/
+env/
+ENV/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Logs
+*.log
+logs/
+*.log.*
+
+# Environment files
+.env
+.env.local
+.env.*.local
+*.key
+*.pem
+!configs/certs/*.pem
+
+# Secrets
+secrets/
+*.secret
+*.token
+
+# Temporary files
+tmp/
+temp/
+*.tmp
+*.temp
+
+# Test coverage
+coverage/
+*.cover
+.coverage
+htmlcov/
+
+# AI/Quantum results
+src/ai-quantum/results/*.json
+src/ai-quantum/qasm_output/*.qasm
+
+# Database
+*.db
+*.sqlite
+*.sqlite3
+
+# OS
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+
+# Keep example files
+!.env.example
+!*.example.*

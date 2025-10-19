@@ -1,0 +1,78 @@
+syntax = "proto3";
+
+package pandora.common;
+
+option go_package = "pandora_box_console_ids_ips/api/proto/common";
+
+import "google/protobuf/timestamp.proto";
+
+// Common message types shared across services
+// 跨服務共享的通用消息類型
+
+// ErrorResponse represents an error response
+message ErrorResponse {
+  string code = 1;
+  string message = 2;
+  repeated string details = 3;
+  google.protobuf.Timestamp timestamp = 4;
+}
+
+// PaginationRequest contains pagination parameters
+message PaginationRequest {
+  int32 page = 1;
+  int32 page_size = 2;
+  string sort_by = 3;
+  string sort_order = 4;  // "asc" or "desc"
+}
+
+// PaginationResponse contains pagination metadata
+message PaginationResponse {
+  int32 page = 1;
+  int32 page_size = 2;
+  int32 total_count = 3;
+  int32 total_pages = 4;
+}
+
+// TimeRange represents a time range
+message TimeRange {
+  google.protobuf.Timestamp start = 1;
+  google.protobuf.Timestamp end = 2;
+}
+
+// IPAddress represents an IP address with additional info
+message IPAddress {
+  string address = 1;
+  IPVersion version = 2;
+  string hostname = 3;
+  string geo_location = 4;
+  bool is_private = 5;
+  bool is_loopback = 6;
+}
+
+// IPVersion represents IP version
+enum IPVersion {
+  IP_VERSION_UNKNOWN = 0;
+  IP_VERSION_V4 = 1;
+  IP_VERSION_V6 = 2;
+}
+
+// Severity represents the severity level
+enum Severity {
+  SEVERITY_UNKNOWN = 0;
+  SEVERITY_INFO = 1;
+  SEVERITY_LOW = 2;
+  SEVERITY_MEDIUM = 3;
+  SEVERITY_HIGH = 4;
+  SEVERITY_CRITICAL = 5;
+}
+
+// ServiceStatus represents the status of a service
+enum ServiceStatus {
+  SERVICE_STATUS_UNKNOWN = 0;
+  SERVICE_STATUS_STARTING = 1;
+  SERVICE_STATUS_RUNNING = 2;
+  SERVICE_STATUS_STOPPING = 3;
+  SERVICE_STATUS_STOPPED = 4;
+  SERVICE_STATUS_ERROR = 5;
+}
+

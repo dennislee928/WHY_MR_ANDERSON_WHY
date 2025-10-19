@@ -1,0 +1,161 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Pandora Box Console IDS-IPS</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            margin: 0;
+            padding: 0;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .container {
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.1);
+            padding: 40px;
+            max-width: 600px;
+            text-align: center;
+        }
+        .logo {
+            font-size: 2.5rem;
+            font-weight: bold;
+            color: #333;
+            margin-bottom: 20px;
+        }
+        .subtitle {
+            color: #666;
+            font-size: 1.2rem;
+            margin-bottom: 30px;
+        }
+        .status {
+            background: #f8f9fa;
+            border-radius: 8px;
+            padding: 20px;
+            margin: 20px 0;
+        }
+        .status-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 10px 0;
+            border-bottom: 1px solid #e9ecef;
+        }
+        .status-item:last-child {
+            border-bottom: none;
+        }
+        .status-label {
+            font-weight: 500;
+            color: #495057;
+        }
+        .status-value {
+            padding: 4px 12px;
+            border-radius: 20px;
+            font-size: 0.9rem;
+            font-weight: 500;
+        }
+        .status-online {
+            background: #d4edda;
+            color: #155724;
+        }
+        .status-offline {
+            background: #f8d7da;
+            color: #721c24;
+        }
+        .links {
+            margin-top: 30px;
+        }
+        .link {
+            display: inline-block;
+            margin: 10px;
+            padding: 12px 24px;
+            background: #007bff;
+            color: white;
+            text-decoration: none;
+            border-radius: 6px;
+            transition: background 0.3s;
+        }
+        .link:hover {
+            background: #0056b3;
+        }
+        .api-info {
+            margin-top: 30px;
+            padding: 20px;
+            background: #e3f2fd;
+            border-radius: 8px;
+            font-family: monospace;
+            font-size: 0.9rem;
+            color: #1565c0;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="logo">🛡️ Pandora Box Console</div>
+        <div class="subtitle">IDS-IPS 入侵檢測與防護系統</div>
+        
+        <div class="status">
+            <div class="status-item">
+                <span class="status-label">系統狀態</span>
+                <span class="status-value status-online">運行中</span>
+            </div>
+            <div class="status-item">
+                <span class="status-label">設備連接</span>
+                <span class="status-value status-online">已連接</span>
+            </div>
+            <div class="status-item">
+                <span class="status-label">網路狀態</span>
+                <span class="status-value status-online">正常</span>
+            </div>
+            <div class="status-item">
+                <span class="status-label">活躍會話</span>
+                <span class="status-value status-online">5 個</span>
+            </div>
+        </div>
+        
+        <div class="links">
+            <a href="/api/v1/status" class="link">API 狀態</a>
+            <a href="/health" class="link">健康檢查</a>
+            <a href="/metrics" class="link">系統指標</a>
+        </div>
+        
+        <div class="api-info">
+            <strong>API 端點：</strong><br>
+            GET /api/v1/status - 系統狀態<br>
+            GET /health - 健康檢查<br>
+            GET /metrics - Prometheus 指標<br>
+            WebSocket /ws - 實時數據
+        </div>
+    </div>
+    
+    <script>
+        // 定期更新狀態
+        async function updateStatus() {
+            try {
+                const response = await fetch('/api/v1/status');
+                const data = await response.json();
+                
+                // 更新狀態顯示
+                document.querySelector('.status-item:nth-child(2) .status-value').textContent = 
+                    data.device_connected ? '已連接' : '未連接';
+                document.querySelector('.status-item:nth-child(3) .status-value').textContent = 
+                    data.network_blocked ? '已阻斷' : '正常';
+                document.querySelector('.status-item:nth-child(4) .status-value').textContent = 
+                    data.active_sessions + ' 個';
+            } catch (error) {
+                console.log('無法獲取狀態:', error);
+            }
+        }
+        
+        // 每30秒更新一次
+        updateStatus();
+        setInterval(updateStatus, 30000);
+    </script>
+</body>
+</html>

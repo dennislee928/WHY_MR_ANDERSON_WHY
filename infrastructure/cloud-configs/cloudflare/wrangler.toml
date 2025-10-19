@@ -1,0 +1,64 @@
+name = "security-platform-worker"
+main = "src/index.js"
+compatibility_date = "2024-01-01"
+
+# Account details
+account_id = "" # Add your Cloudflare account ID
+workers_dev = true
+
+# Routes (configure for production)
+# routes = [
+#   { pattern = "api.example.com/*", zone_name = "example.com" }
+# ]
+
+# Environment Variables
+[env.production]
+name = "security-platform-prod"
+
+[env.staging]
+name = "security-platform-staging"
+
+# D1 Database binding
+[[d1_databases]]
+binding = "DB"
+database_name = "security_platform_db"
+database_id = "" # Add your D1 database ID
+
+# KV Namespace bindings
+[[kv_namespaces]]
+binding = "CACHE"
+id = "" # Add your KV namespace ID
+preview_id = "" # Add your preview KV namespace ID
+
+[[kv_namespaces]]
+binding = "SESSIONS"
+id = "" # Add your sessions KV namespace ID
+preview_id = ""
+
+# Durable Objects (for WebSocket management)
+[[durable_objects.bindings]]
+name = "WEBSOCKET_MANAGER"
+class_name = "WebSocketManager"
+script_name = "security-platform-worker"
+
+[[migrations]]
+tag = "v1"
+new_classes = ["WebSocketManager"]
+
+# Resource limits (within free tier)
+[limits]
+cpu_ms = 30000 # 30 seconds max per request
+
+# Analytics
+[observability]
+enabled = true
+
+# Build configuration
+[build]
+command = "npm run build"
+watch_dirs = ["src"]
+
+[build.upload]
+format = "modules"
+main = "./dist/index.js"
+
