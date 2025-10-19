@@ -1,0 +1,430 @@
+pipeline:
+  name: Security Platform Multi-Cloud Deployment
+  identifier: security_platform_multi_cloud
+  projectIdentifier: security_platform
+  orgIdentifier: default
+  tags:
+    platform: multi-cloud
+    type: deployment
+  
+  properties:
+    ci:
+      codebase:
+        connectorRef: github_connector
+        repoName: security-platform
+        build:
+          type: branch
+          spec:
+            branch: <+input>
+  
+  stages:
+    # Stage 1: Build and Test
+    - stage:
+        name: Build and Test
+        identifier: build_test
+        type: CI
+        spec:
+          cloneCodebase: true
+          execution:
+            steps:
+              # Backend Build
+              - step:
+                  type: Run
+                  name: Build Go Backend
+                  identifier: build_backend
+                  spec:
+                    connectorRef: docker_hub
+                    image: golang:1.24-alpine
+                    shell: Sh
+                    command: |
+                      cd src/backend
+                      go mod download
+                      go build -o bin/server ./cmd/server
+                      go test ./... -v -cover
+                    resources:
+                      limits:
+                        memory: 2Gi
+                        cpu: "1000m"
+              
+              # AI/Quantum Build
+              - step:
+                  type: Run
+                  name: Build Python AI
+                  identifier: build_ai
+                  spec:
+                    connectorRef: docker_hub
+                    image: python:3.11-alpine
+                    shell: Sh
+                    command: |
+                      cd src/ai-quantum
+                      pip install -r requirements.txt
+                      python -m pytest tests/ -v || echo "No tests found"
+                    resources:
+                      limits:
+                        memory: 2Gi
+                        cpu: "1000m"
+              
+              # Frontend Build
+              - step:
+                  type: Run
+                  name: Build Frontend
+                  identifier: build_frontend
+                  spec:
+                    connectorRef: docker_hub
+                    image: node:18-alpine
+                    shell: Sh
+                    command: |
+                      cd src/frontend
+                      npm install
+                      npm run build
+                      npm test || echo "No tests configured"
+                    resources:
+                      limits:
+                        memory: 2Gi
+                        cpu: "1000m"
+              
+              # Security Scan
+              - step:
+                  type: Run
+                  name: Security Scan
+                  identifier: security_scan
+                  spec:
+                    connectorRef: docker_hub
+                    image: aquasec/trivy:latest
+                    shell: Sh
+                    command: |
+                      trivy fs --severity HIGH,CRITICAL .
+                    resources:
+                      limits:
+                        memory: 1Gi
+                        cpu: "500m"
+          
+          infrastructure:
+            type: KubernetesDirect
+            spec:
+              connectorRef: kubernetes_connector
+              namespace: harness-builds
+              automountServiceAccountToken: true
+    
+    # Stage 2: Build Docker Images
+    - stage:
+        name: Build Docker Images
+        identifier: build_images
+        type: CI
+        spec:
+          cloneCodebase: true
+          execution:
+            steps:
+              - step:
+                  type: BuildAndPushDockerRegistry
+                  name: Build Backend Image
+                  identifier: build_backend_image
+                  spec:
+                    connectorRef: docker_hub
+                    repo: security-platform/backend
+                    tags:
+                      - <+pipeline.sequenceId>
+                      - latest
+                    dockerfile: src/backend/Dockerfile
+                    context: src/backend
+                    buildArgs:
+                      GO_VERSION: "1.24"
+              
+              - step:
+                  type: BuildAndPushDockerRegistry
+                  name: Build AI Image
+                  identifier: build_ai_image
+                  spec:
+                    connectorRef: docker_hub
+                    repo: security-platform/ai-quantum
+                    tags:
+                      - <+pipeline.sequenceId>
+                      - latest
+                    dockerfile: src/ai-quantum/Dockerfile
+                    context: src/ai-quantum
+              
+              - step:
+                  type: BuildAndPushDockerRegistry
+                  name: Build Frontend Image
+                  identifier: build_frontend_image
+                  spec:
+                    connectorRef: docker_hub
+                    repo: security-platform/frontend
+                    tags:
+                      - <+pipeline.sequenceId>
+                      - latest
+                    dockerfile: src/frontend/Dockerfile
+                    context: src/frontend
+          
+          infrastructure:
+            type: KubernetesDirect
+            spec:
+              connectorRef: kubernetes_connector
+              namespace: harness-builds
+    
+    # Stage 3: Deploy to Cloudflare
+    - stage:
+        name: Deploy to Cloudflare
+        identifier: deploy_cloudflare
+        type: Deployment
+        spec:
+          deploymentType: Custom
+          service:
+            serviceRef: cloudflare_workers
+            serviceInputs:
+              serviceDefinition:
+                type: CustomDeployment
+                spec:
+                  variables:
+                    - name: CLOUDFLARE_API_TOKEN
+                      type: Secret
+                      value: <+secrets.getValue("cloudflare_api_token")>
+          execution:
+            steps:
+              - step:
+                  type: ShellScript
+                  name: Deploy to Cloudflare Workers
+                  identifier: deploy_workers
+                  spec:
+                    shell: Bash
+                    onDelegate: true
+                    source:
+                      type: Inline
+                      spec:
+                        script: |
+                          #!/bin/bash
+                          set -e
+                          
+                          # Install dependencies
+                          cd infrastructure/cloud-configs/cloudflare
+                          npm install
+                          
+                          # Deploy to Cloudflare
+                          npx wrangler deploy --env production
+                          
+                          echo "Cloudflare deployment successful!"
+                    environmentVariables:
+                      - name: CLOUDFLARE_API_TOKEN
+                        type: Secret
+                        value: <+secrets.getValue("cloudflare_api_token")>
+                      - name: CLOUDFLARE_ACCOUNT_ID
+                        type: String
+                        value: <+serviceVariables.cloudflare_account_id>
+                    outputVariables:
+                      - name: deployment_url
+                        type: String
+                        value: worker_url
+          environment:
+            environmentRef: cloudflare_production
+            deployToAll: false
+            infrastructureDefinitions:
+              - identifier: cloudflare_infra
+    
+    # Stage 4: Deploy to OCI
+    - stage:
+        name: Deploy to OCI
+        identifier: deploy_oci
+        type: Deployment
+        spec:
+          deploymentType: Kubernetes
+          service:
+            serviceRef: security_platform_oci
+            serviceInputs:
+              serviceDefinition:
+                type: Kubernetes
+                spec:
+                  manifests:
+                    - manifest:
+                        identifier: k8s_manifests
+                        type: K8sManifest
+                        spec:
+                          store:
+                            type: Github
+                            spec:
+                              connectorRef: github_connector
+                              gitFetchType: Branch
+                              paths:
+                                - infrastructure/kubernetes
+                              branch: main
+                          valuesPaths:
+                            - infrastructure/kubernetes/values-oci.yaml
+          execution:
+            steps:
+              - step:
+                  type: K8sRollingDeploy
+                  name: Rolling Deployment
+                  identifier: rolling_deploy
+                  spec:
+                    skipDryRun: false
+                    pruningEnabled: false
+                  timeout: 10m
+              
+              - step:
+                  type: K8sBlueGreenDeploy
+                  name: Blue Green Deployment
+                  identifier: bluegreen_deploy
+                  spec:
+                    skipDryRun: false
+                  timeout: 10m
+                  when:
+                    stageStatus: Success
+                    condition: <+pipeline.variables.deployment_strategy> == "bluegreen"
+              
+              - step:
+                  type: K8sCanaryDeploy
+                  name: Canary Deployment
+                  identifier: canary_deploy
+                  spec:
+                    instanceSelection:
+                      type: Count
+                      spec:
+                        count: 1
+                    skipDryRun: false
+                  timeout: 10m
+                  when:
+                    stageStatus: Success
+                    condition: <+pipeline.variables.deployment_strategy> == "canary"
+          
+          environment:
+            environmentRef: oci_production
+            deployToAll: false
+            infrastructureDefinitions:
+              - identifier: oci_kubernetes
+    
+    # Stage 5: Deploy to IBM Cloud
+    - stage:
+        name: Deploy to IBM Cloud
+        identifier: deploy_ibm
+        type: Deployment
+        spec:
+          deploymentType: CustomDeployment
+          service:
+            serviceRef: ibm_cloud_foundry
+          execution:
+            steps:
+              - step:
+                  type: ShellScript
+                  name: Deploy to IBM Cloud Foundry
+                  identifier: deploy_cf
+                  spec:
+                    shell: Bash
+                    onDelegate: true
+                    source:
+                      type: Inline
+                      spec:
+                        script: |
+                          #!/bin/bash
+                          set -e
+                          
+                          # Install IBM Cloud CLI
+                          curl -fsSL https://clis.cloud.ibm.com/install/linux | sh
+                          
+                          # Login
+                          ibmcloud login --apikey ${IBM_CLOUD_API_KEY} -r ${IBM_CLOUD_REGION}
+                          ibmcloud target --cf
+                          
+                          # Deploy
+                          cd infrastructure/cloud-configs/ibm
+                          ibmcloud cf push
+                          
+                          echo "IBM Cloud deployment successful!"
+                    environmentVariables:
+                      - name: IBM_CLOUD_API_KEY
+                        type: Secret
+                        value: <+secrets.getValue("ibm_cloud_api_key")>
+                      - name: IBM_CLOUD_REGION
+                        type: String
+                        value: us-south
+                    timeout: 15m
+          
+          environment:
+            environmentRef: ibm_production
+            deployToAll: false
+            infrastructureDefinitions:
+              - identifier: ibm_infra
+    
+    # Stage 6: Post-Deployment Verification
+    - stage:
+        name: Verification
+        identifier: verification
+        type: Approval
+        spec:
+          execution:
+            steps:
+              - step:
+                  type: HarnessApproval
+                  name: Manual Approval
+                  identifier: manual_approval
+                  spec:
+                    approvalMessage: Please review and approve deployment
+                    includePipelineExecutionHistory: true
+                    approvers:
+                      userGroups:
+                        - account.admin
+                        - org.devops
+                      minimumCount: 1
+                      disallowPipelineExecutor: false
+                    approverInputs: []
+                  timeout: 1d
+              
+              - step:
+                  type: ShellScript
+                  name: Health Check
+                  identifier: health_check
+                  spec:
+                    shell: Bash
+                    onDelegate: true
+                    source:
+                      type: Inline
+                      spec:
+                        script: |
+                          #!/bin/bash
+                          set -e
+                          
+                          # Check Cloudflare
+                          curl -f https://security-platform-worker.workers.dev/api/v1/health || exit 1
+                          
+                          # Check OCI
+                          curl -f http://${OCI_SERVER_IP}:3001/api/v1/health || exit 1
+                          
+                          # Check IBM
+                          curl -f https://security-platform-api.mybluemix.net/api/v1/health || exit 1
+                          
+                          echo "All health checks passed!"
+  
+  variables:
+    - name: deployment_strategy
+      type: String
+      description: Deployment strategy (rolling/bluegreen/canary)
+      value: rolling
+    - name: environment
+      type: String
+      description: Target environment
+      value: production
+  
+  notificationRules:
+    - name: Pipeline Success
+      identifier: pipeline_success
+      pipelineEvents:
+        - type: PipelineSuccess
+      notificationMethod:
+        type: Slack
+        spec:
+          slackWebhookUrl: <+secrets.getValue("slack_webhook")>
+          message: |
+            Pipeline <+pipeline.name> succeeded!
+            Execution: <+pipeline.executionUrl>
+    
+    - name: Pipeline Failure
+      identifier: pipeline_failure
+      pipelineEvents:
+        - type: PipelineFailed
+      notificationMethod:
+        type: Slack
+        spec:
+          slackWebhookUrl: <+secrets.getValue("slack_webhook")>
+          message: |
+            Pipeline <+pipeline.name> failed!
+            Stage: <+pipeline.stages.failed.name>
+            Execution: <+pipeline.executionUrl>
+

@@ -1,0 +1,217 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: pandora-system
+  labels:
+    name: pandora-system
+    app: pandora-box
+
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: device-service-config
+  namespace: pandora-system
+data:
+  device-config.yaml: |
+    service:
+      name: device-service
+      version: 1.0.0
+    grpc:
+      port: 50051
+      max_connections: 100
+    device:
+      default_port: /dev/ttyUSB0
+      default_baud_rate: 115200
+    rabbitmq:
+      url: amqp://pandora:pandora123@rabbitmq:5672/
+      exchange: pandora.events
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: device-service
+  namespace: pandora-system
+  labels:
+    app: device-service
+    component: microservice
+    tier: backend
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: device-service
+  template:
+    metadata:
+      labels:
+        app: device-service
+        component: microservice
+        tier: backend
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "9091"
+        prometheus.io/path: "/metrics"
+    spec:
+      serviceAccountName: device-service
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        fsGroup: 1000
+      containers:
+      - name: device-service
+        image: pandora-box/device-service:latest
+        imagePullPolicy: IfNotPresent
+        ports:
+        - name: grpc
+          containerPort: 50051
+          protocol: TCP
+        - name: http
+          containerPort: 8081
+          protocol: TCP
+        - name: metrics
+          containerPort: 9091
+          protocol: TCP
+        env:
+        - name: RABBITMQ_URL
+          valueFrom:
+            secretKeyRef:
+              name: rabbitmq-secret
+              key: url
+        - name: LOG_LEVEL
+          value: "info"
+        - name: DEVICE_PORT
+          value: "/dev/ttyUSB0"
+        volumeMounts:
+        - name: config
+          mountPath: /app/config
+          readOnly: true
+        - name: certs
+          mountPath: /app/certs
+          readOnly: true
+        - name: dev
+          mountPath: /dev
+        resources:
+          requests:
+            memory: "64Mi"
+            cpu: "100m"
+          limits:
+            memory: "256Mi"
+            cpu: "500m"
+        livenessProbe:
+          httpGet:
+            path: /live
+            port: 8081
+          initialDelaySeconds: 10
+          periodSeconds: 30
+          timeoutSeconds: 5
+          failureThreshold: 3
+        readinessProbe:
+          httpGet:
+            path: /ready
+            port: 8081
+          initialDelaySeconds: 5
+          periodSeconds: 10
+          timeoutSeconds: 3
+          failureThreshold: 3
+      volumes:
+      - name: config
+        configMap:
+          name: device-service-config
+      - name: certs
+        secret:
+          secretName: device-service-certs
+      - name: dev
+        hostPath:
+          path: /dev
+          type: Directory
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: device-service
+  namespace: pandora-system
+  labels:
+    app: device-service
+spec:
+  type: ClusterIP
+  ports:
+  - name: grpc
+    port: 50051
+    targetPort: 50051
+    protocol: TCP
+  - name: http
+    port: 8081
+    targetPort: 8081
+    protocol: TCP
+  - name: metrics
+    port: 9091
+    targetPort: 9091
+    protocol: TCP
+  selector:
+    app: device-service
+
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: device-service
+  namespace: pandora-system
+
+---
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: device-service-hpa
+  namespace: pandora-system
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: device-service
+  minReplicas: 2
+  maxReplicas: 10
+  metrics:
+  - type: Resource
+    resource:
+      name: cpu
+      target:
+        type: Utilization
+        averageUtilization: 70
+  - type: Resource
+    resource:
+      name: memory
+      target:
+        type: Utilization
+        averageUtilization: 80
+  behavior:
+    scaleDown:
+      stabilizationWindowSeconds: 300
+      policies:
+      - type: Percent
+        value: 50
+        periodSeconds: 60
+    scaleUp:
+      stabilizationWindowSeconds: 0
+      policies:
+      - type: Percent
+        value: 100
+        periodSeconds: 30
+      - type: Pods
+        value: 2
+        periodSeconds: 30
+      selectPolicy: Max
+
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: device-service-pdb
+  namespace: pandora-system
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app: device-service
+

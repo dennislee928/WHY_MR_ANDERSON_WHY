@@ -1,0 +1,197 @@
+# Pandora Box Console IDS-IPS Agent 設定檔範本
+# =============================================
+
+# 基本設定
+app:
+  name: "Pandora Box Console IDS-IPS Agent"
+  version: "1.0.0"
+  environment: "${ENVIRONMENT:-production}"
+
+# 日誌設定
+logging:
+  level: "${LOG_LEVEL:-info}"
+  format: "${LOG_FORMAT:-json}"
+  output: "stdout"
+  file_path: "/app/logs/agent.log"
+  max_size: 100
+  max_backups: 5
+  max_age: 30
+  compress: true
+
+# 裝置設定
+device:
+  port: "${DEVICE_PORT:-/dev/ttyUSB0}"
+  baud_rate: ${DEVICE_BAUD_RATE:-115200}
+  timeout: "30s"
+  retry_attempts: 3
+  retry_interval: "5s"
+  heartbeat_interval: "10s"
+
+# 網路管理設定
+network:
+  interface: "${NETWORK_INTERFACE:-eth0}"
+  timeout: "${NETWORK_TIMEOUT:-30m}"
+  block_time: "${NETWORK_BLOCK_TIME:-20:00}"
+  unlock_time: "${NETWORK_UNLOCK_TIME:-08:00}"
+  allowed_ips:
+    - "127.0.0.1"
+    - "::1"
+  blocked_ports:
+    - 22
+    - 3389
+
+# PIN碼系統設定
+pin:
+  length: 6
+  expiry_time: "5m"
+  max_attempts: 3
+  lockout_time: "10m"
+  complexity: "numeric"
+
+# Token認證設定
+token:
+  enabled: true
+  usb_paths:
+    - "/media/usb"
+    - "/mnt/usb"
+    - "/dev/sd*"
+  token_file: "pandora.token"
+  expiry_time: "24h"
+  auto_cleanup: true
+
+# mTLS設定
+mtls:
+  enabled: true
+  cert_file: "${MTLS_CERT_PATH:-/certs/client.crt}"
+  key_file: "${MTLS_KEY_PATH:-/certs/client.key}"
+  ca_file: "${MTLS_CA_PATH:-/certs/ca.crt}"
+  server_name: "${MTLS_SERVER_NAME:-pandora-server}"
+  insecure_skip_verify: false
+
+# Prometheus指標設定
+metrics:
+  enabled: true
+  listen_address: "0.0.0.0:8080"
+  path: "/metrics"
+  update_interval: "15s"
+
+# Grafana整合設定
+grafana:
+  enabled: true
+  url: "${GRAFANA_URL:-http://grafana:3000}"
+  api_key: "${GRAFANA_API_KEY:-}"
+  timeout: "30s"
+  dashboards:
+    auto_create: true
+    update_interval: "1h"
+
+# Loki日誌設定
+loki:
+  enabled: true
+  url: "${LOKI_URL:-http://loki:3100}"
+  username: ""
+  password: ""
+  batch_size: 100
+  batch_timeout: "5s"
+  labels:
+    service: "pandora-agent"
+    environment: "${ENVIRONMENT:-production}"
+
+# Axiom Engine設定
+axiom:
+  enabled: true
+  rules_file: "/app/configs/security-rules.yaml"
+  threat_cache_ttl: "1h"
+  blacklist_ttl: "24h"
+  whitelist_file: "/app/configs/whitelist.yaml"
+
+# 安全設定
+security:
+  encryption_key: "${ENCRYPTION_KEY:-pandora-default-key-change-in-prod}"
+  rate_limiting:
+    enabled: true
+    requests_per_minute: 60
+  ip_filtering:
+    enabled: true
+    whitelist_file: "/app/configs/ip-whitelist.yaml"
+    blacklist_file: "/app/configs/ip-blacklist.yaml"
+
+# 資料庫設定
+database:
+  type: "postgres"
+  host: "${DATABASE_HOST:-postgres}"
+  port: ${DATABASE_PORT:-5432}
+  name: "${DATABASE_NAME:-pandora}"
+  username: "${DATABASE_USER:-pandora}"
+  password: "${DATABASE_PASSWORD:-pandora123}"
+  ssl_mode: "${DATABASE_SSL_MODE:-require}"
+  max_connections: 10
+  max_idle_connections: 5
+  connection_lifetime: "1h"
+
+# Redis設定
+redis:
+  enabled: true
+  host: "${REDIS_HOST:-redis}"
+  port: ${REDIS_PORT:-6379}
+  password: "${REDIS_PASSWORD:-}"
+  database: ${REDIS_DATABASE:-0}
+  pool_size: 10
+  timeout: "5s"
+
+# HTTP伺服器設定
+http:
+  enabled: true
+  listen_address: "0.0.0.0:8080"
+  tls:
+    enabled: false
+    cert_file: "/certs/server.crt"
+    key_file: "/certs/server.key"
+  cors:
+    enabled: true
+    allowed_origins: ["*"]
+    allowed_methods: ["GET", "POST", "PUT", "DELETE"]
+    allowed_headers: ["*"]
+
+# WebSocket設定
+websocket:
+  enabled: true
+  path: "/ws"
+  max_connections: 100
+  ping_interval: "30s"
+  pong_timeout: "10s"
+
+# 告警設定
+alerting:
+  enabled: true
+  webhook_url: "${ALERT_WEBHOOK_URL:-}"
+  email:
+    enabled: false
+    smtp_server: "smtp.gmail.com"
+    smtp_port: 587
+    username: "${EMAIL_USERNAME:-}"
+    password: "${EMAIL_PASSWORD:-}"
+    from: "pandora@example.com"
+    to: ["admin@example.com"]
+  slack:
+    enabled: false
+    webhook_url: "${SLACK_WEBHOOK_URL:-}"
+    channel: "#alerts"
+
+# 效能調校設定
+performance:
+  worker_pool_size: ${WORKER_POOL_SIZE:-10}
+  buffer_size: ${BUFFER_SIZE:-1000}
+  gc_percentage: ${GC_PERCENTAGE:-100}
+  max_memory_usage: "${MAX_MEMORY_USAGE:-512MB}"
+  cpu_profile: ${ENABLE_CPU_PROFILE:-false}
+  memory_profile: ${ENABLE_MEMORY_PROFILE:-false}
+
+# 功能開關
+features:
+  packet_capture: ${ENABLE_PACKET_CAPTURE:-true}
+  deep_packet_inspection: ${ENABLE_DEEP_PACKET_INSPECTION:-true}
+  behavioral_analysis: ${ENABLE_BEHAVIORAL_ANALYSIS:-true}
+  geo_location: ${ENABLE_GEO_LOCATION:-true}
+  threat_intelligence: ${ENABLE_THREAT_INTELLIGENCE:-true}
+  auto_remediation: ${ENABLE_AUTO_REMEDIATION:-true}

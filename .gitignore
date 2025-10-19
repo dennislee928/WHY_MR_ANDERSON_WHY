@@ -1,111 +1,86 @@
-# ============================================
-# Security & Infrastructure Tools Set
-# .gitignore
-# ============================================
+# Project-specific excludes
+Sext-Adventure/
+personal-publicdata/
 
-# Environment variables
-.env
-.env.local
-.env.*.local
+# Old project directories (backup only)
+Local_IPS-IDS/
+Security-and-Infrastructure-tools-Set/
 
-# Backups
-backups/
-*.sql
-*.dump
-*.bak
-
-# Logs
-*.log
-logs/
-
-# Docker volumes
-postgres_data/
-vault_data/
-scan_results/
-
-# Scan results
-*.json
-*.xml
-*.html
-results/
-
-# OS specific
-.DS_Store
-Thumbs.db
-desktop.ini
-
-# IDE / Editor
-.vscode/
-.idea/
-*.swp
-*.swo
-*~
-.project
-.settings/
-
-# Python
-__pycache__/
-*.py[cod]
-*$py.class
-*.so
-.Python
-env/
-venv/
-ENV/
-.venv
-pip-log.txt
-pip-delete-this-directory.txt
-.pytest_cache/
-.coverage
-htmlcov/
-
-# Node.js
-node_modules/
-npm-debug.log
-yarn-error.log
-
-# Go
+# Build artifacts
 *.exe
-*.exe~
 *.dll
 *.so
 *.dylib
 *.test
 *.out
-vendor/
-
-# Build artifacts
 dist/
 build/
-*.egg-info/
+bin/
+
+# Dependencies
+node_modules/
+vendor/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+venv/
+env/
+ENV/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Logs
+*.log
+logs/
+*.log.*
+
+# Environment files
+.env
+.env.local
+.env.*.local
+*.key
+*.pem
+!configs/certs/*.pem
+
+# Secrets
+secrets/
+*.secret
+*.token
 
 # Temporary files
 tmp/
 temp/
 *.tmp
+*.temp
 
-# Sensitive data
-secrets/
-*.pem
-*.key
-*.crt
-*.p12
-*.pfx
+# Test coverage
+coverage/
+*.cover
+.coverage
+htmlcov/
 
-# GPG encrypted
-*.gpg
+# AI/Quantum results
+src/ai-quantum/results/*.json
+src/ai-quantum/qasm_output/*.qasm
 
-# Terraform
-.terraform/
-*.tfstate
-*.tfstate.backup
+# Database
+*.db
+*.sqlite
+*.sqlite3
 
-# Ansible
-*.retry
+# OS
+Thumbs.db
+ehthumbs.db
+Desktop.ini
 
-# Miscellaneous
-*.pid
-*.seed
-*.pid.lock
-.cache/
-
+# Keep example files
+!.env.example
+!*.example.*

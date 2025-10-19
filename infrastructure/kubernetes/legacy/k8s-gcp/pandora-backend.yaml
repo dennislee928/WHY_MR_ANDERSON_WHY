@@ -1,0 +1,170 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: pandora-agent
+  namespace: pandora-box
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: pandora-agent
+  template:
+    metadata:
+      labels:
+        app: pandora-agent
+    spec:
+      containers:
+      - name: pandora-agent
+        image: gcr.io/YOUR_PROJECT_ID/pandora-agent:latest  # 需要替換為實際的 GCP Project ID
+        ports:
+        - containerPort: 8080
+        env:
+        - name: LOG_LEVEL
+          value: "info"
+        - name: DEVICE_PORT
+          value: "/dev/ttyUSB0"
+        - name: GRAFANA_URL
+          value: "http://grafana:3000"
+        - name: PROMETHEUS_URL
+          value: "http://prometheus:9090"
+        - name: LOKI_URL
+          value: "http://loki:3100"
+        - name: MTLS_CERT_PATH
+          value: "/certs/client.crt"
+        - name: MTLS_KEY_PATH
+          value: "/certs/client.key"
+        volumeMounts:
+        - name: pandora-config
+          mountPath: /app/config
+        - name: certs
+          mountPath: /certs
+        resources:
+          requests:
+            memory: "128Mi"
+            cpu: "100m"
+          limits:
+            memory: "256Mi"
+            cpu: "200m"
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 8080
+          initialDelaySeconds: 30
+          periodSeconds: 10
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: 8080
+          initialDelaySeconds: 5
+          periodSeconds: 5
+      volumes:
+      - name: pandora-config
+        configMap:
+          name: pandora-config
+          items:
+          - key: agent-config.yaml
+            path: agent-config.yaml
+      - name: certs
+        secret:
+          secretName: pandora-secrets
+          items:
+          - key: mtls-cert
+            path: client.crt
+          - key: mtls-key
+            path: client.key
+      imagePullSecrets:
+      - name: gcr-registry-secret
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: pandora-agent
+  namespace: pandora-box
+spec:
+  selector:
+    app: pandora-agent
+  ports:
+  - port: 8080
+    targetPort: 8080
+    protocol: TCP
+  type: ClusterIP
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: pandora-console
+  namespace: pandora-box
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: pandora-console
+  template:
+    metadata:
+      labels:
+        app: pandora-console
+    spec:
+      containers:
+      - name: pandora-console
+        image: gcr.io/YOUR_PROJECT_ID/pandora-console:latest  # 需要替換為實際的 GCP Project ID
+        ports:
+        - containerPort: 3001
+        env:
+        - name: LOG_LEVEL
+          value: "info"
+        - name: PROMETHEUS_URL
+          value: "http://prometheus:9090"
+        - name: GRAFANA_URL
+          value: "http://grafana:3000"
+        - name: REDIS_URL
+          value: "redis:6379"
+        - name: POSTGRES_URL
+          value: "postgres:5432"
+        volumeMounts:
+        - name: pandora-config
+          mountPath: /app/config
+        resources:
+          requests:
+            memory: "128Mi"
+            cpu: "100m"
+          limits:
+            memory: "256Mi"
+            cpu: "200m"
+        livenessProbe:
+          httpGet:
+            path: /api/v1/health
+            port: 3001
+          initialDelaySeconds: 30
+          periodSeconds: 10
+        readinessProbe:
+          httpGet:
+            path: /api/v1/health
+            port: 3001
+          initialDelaySeconds: 5
+          periodSeconds: 5
+      volumes:
+      - name: pandora-config
+        configMap:
+          name: pandora-config
+          items:
+          - key: console-config.yaml
+            path: console-config.yaml
+      imagePullSecrets:
+      - name: gcr-registry-secret
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: pandora-console
+  namespace: pandora-box
+spec:
+  selector:
+    app: pandora-console
+  ports:
+  - port: 3001
+    targetPort: 3001
+    protocol: TCP
+  type: ClusterIP

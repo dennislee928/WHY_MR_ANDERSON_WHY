@@ -1,0 +1,88 @@
+#cloud-config
+# Cloud-init configuration for Application Server
+
+package_update: true
+package_upgrade: true
+
+packages:
+  - docker.io
+  - docker-compose
+  - git
+  - curl
+  - wget
+  - htop
+  - vim
+
+# Create application directory
+runcmd:
+  # Install Docker Compose v2
+  - curl -L "https://github.com/docker/compose/releases/download/v${docker_compose_version}/docker-compose-$(uname -s)-$(uname -m)" -o /usr/local/bin/docker-compose
+  - chmod +x /usr/local/bin/docker-compose
+  
+  # Configure Docker
+  - systemctl enable docker
+  - systemctl start docker
+  - usermod -aG docker ubuntu
+  
+  # Create application directory
+  - mkdir -p /opt/security-platform
+  - chown -R ubuntu:ubuntu /opt/security-platform
+  
+  # Clone repository (you'll need to update this with your repo URL)
+  # - git clone https://github.com/your-org/security-platform.git /opt/security-platform
+  
+  # Create docker-compose override for OCI
+  - |
+    cat > /opt/security-platform/docker-compose.override.yml <<EOF
+    version: '3.8'
+    services:
+      backend:
+        environment:
+          - DB_HOST=\${DB_SERVER_IP}
+          - REDIS_HOST=\${DB_SERVER_IP}
+        ports:
+          - "3001:3001"
+      
+      frontend:
+        ports:
+          - "80:3000"
+      
+      ai-quantum:
+        ports:
+          - "8000:8000"
+    EOF
+  
+  # Set up automatic updates
+  - apt-get install -y unattended-upgrades
+  - dpkg-reconfigure -plow unattended-upgrades
+
+write_files:
+  - path: /etc/systemd/system/security-platform.service
+    content: |
+      [Unit]
+      Description=Security Platform Application
+      Requires=docker.service
+      After=docker.service
+
+      [Service]
+      Type=oneshot
+      RemainAfterExit=yes
+      WorkingDirectory=/opt/security-platform
+      ExecStart=/usr/local/bin/docker-compose up -d
+      ExecStop=/usr/local/bin/docker-compose down
+
+      [Install]
+      WantedBy=multi-user.target
+    permissions: '0644'
+
+final_message: |
+  Application server setup complete!
+  
+  Next steps:
+  1. SSH into the server: ssh ubuntu@<public_ip>
+  2. Navigate to /opt/security-platform
+  3. Configure environment variables in .env
+  4. Start services: docker-compose up -d
+  
+  Server is ready at: http://<public_ip>
+

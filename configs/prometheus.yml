@@ -1,0 +1,99 @@
+# Prometheus 設定檔
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+  external_labels:
+    cluster: 'pandora-box-console'
+    environment: 'production'
+
+# 告警規則檔案
+rule_files:
+  - "/etc/prometheus/rules/*.yml"
+
+# 告警管理器設定
+alerting:
+  alertmanagers:
+    - static_configs:
+        - targets:
+          - alertmanager:9093
+
+# 抓取設定
+scrape_configs:
+  # Prometheus 自身監控
+  - job_name: 'prometheus'
+    static_configs:
+      - targets: ['localhost:9090']
+    scrape_interval: 30s
+    metrics_path: /metrics
+
+  # Pandora Box Console Agent
+  - job_name: 'pandora-agent'
+    static_configs:
+      - targets: ['pandora-agent:8080']
+    scrape_interval: 15s
+    metrics_path: /metrics
+    scrape_timeout: 10s
+
+  # Axiom UI Server
+  - job_name: 'axiom-ui'
+    static_configs:
+      - targets: ['axiom-ui:3001']
+    scrape_interval: 15s
+    metrics_path: /metrics
+    scrape_timeout: 10s
+
+  # Node Exporter - 系統監控
+  - job_name: 'node-exporter'
+    static_configs:
+      - targets: ['node-exporter:9100']
+    scrape_interval: 30s
+    metrics_path: /metrics
+
+  # Grafana 監控
+  - job_name: 'grafana'
+    static_configs:
+      - targets: ['grafana:3000']
+    scrape_interval: 30s
+    metrics_path: /metrics
+
+  # Loki 監控
+  - job_name: 'loki'
+    static_configs:
+      - targets: ['loki:3100']
+    scrape_interval: 30s
+    metrics_path: /metrics
+
+  # AlertManager 監控
+  - job_name: 'alertmanager'
+    static_configs:
+      - targets: ['alertmanager:9093']
+    scrape_interval: 30s
+    metrics_path: /metrics
+
+  # Redis 監控
+  - job_name: 'redis'
+    static_configs:
+      - targets: ['redis:6379']
+    scrape_interval: 30s
+    metrics_path: /metrics
+
+  # PostgreSQL 監控
+  - job_name: 'postgres'
+    static_configs:
+      - targets: ['postgres:5432']
+    scrape_interval: 30s
+    metrics_path: /metrics
+
+# 遠端寫入設定 (可選)
+# remote_write:
+#   - url: "https://prometheus-remote-write.example.com/api/v1/write"
+#     basic_auth:
+#       username: "user"
+#       password: "pass"
+
+# 遠端讀取設定 (可選)
+# remote_read:
+#   - url: "https://prometheus-remote-read.example.com/api/v1/read"
+#     basic_auth:
+#       username: "user"
+#       password: "pass"

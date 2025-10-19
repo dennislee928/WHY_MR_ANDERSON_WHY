@@ -1,0 +1,58 @@
+# IBM Cloud Foundry Manifest
+# Deploy Security Platform to IBM Cloud Lite tier
+
+applications:
+  - name: security-platform-api
+    memory: 256M
+    instances: 1
+    buildpacks:
+      - go_buildpack
+    path: ../../../src/backend
+    command: ./axiom-api/cmd/server/main
+    env:
+      GOVERSION: go1.24
+      GOPACKAGENAME: github.com/security-platform/backend
+    services:
+      - security-platform-db
+      - security-platform-redis
+    routes:
+      - route: security-platform-api.mybluemix.net
+    health-check-type: http
+    health-check-http-endpoint: /api/v1/health
+    timeout: 180
+
+  - name: security-platform-ai
+    memory: 512M
+    instances: 1
+    buildpacks:
+      - python_buildpack
+    path: ../../../src/ai-quantum
+    command: python main.py
+    env:
+      PYTHON_VERSION: 3.11.x
+    services:
+      - security-platform-db
+      - security-platform-redis
+    routes:
+      - route: security-platform-ai.mybluemix.net
+    health-check-type: http
+    health-check-http-endpoint: /api/v1/status
+    timeout: 180
+
+  - name: security-platform-frontend
+    memory: 256M
+    instances: 1
+    buildpacks:
+      - nodejs_buildpack
+    path: ../../../src/frontend
+    command: npm start
+    env:
+      NODE_ENV: production
+      NEXT_PUBLIC_API_URL: https://security-platform-api.mybluemix.net
+      NEXT_PUBLIC_WS_URL: wss://security-platform-api.mybluemix.net
+    routes:
+      - route: security-platform.mybluemix.net
+    health-check-type: http
+    health-check-http-endpoint: /
+    timeout: 180
+

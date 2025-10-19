@@ -1,0 +1,62 @@
+server:
+  http_listen_port: 9080
+  grpc_listen_port: 0
+
+positions:
+  filename: /app/data/positions.yaml
+
+clients:
+  - url: ${LOKI_URL}/loki/api/v1/push
+    timeout: 10s
+    backoff_config:
+      min_period: 500ms
+      max_period: 5m
+      max_retries: 10
+
+scrape_configs:
+  # Pandora Agent 日誌
+  - job_name: pandora-agent
+    static_configs:
+      - targets:
+          - localhost
+        labels:
+          job: pandora-agent
+          service: pandora-agent
+          environment: production
+          __path__: /app/logs/agent.log
+
+  # Supervisor 日誌
+  - job_name: supervisor
+    static_configs:
+      - targets:
+          - localhost
+        labels:
+          job: supervisor
+          service: supervisor
+          environment: production
+          __path__: /app/logs/supervisord.log
+
+  # 應用資料日誌
+  - job_name: app-data
+    static_configs:
+      - targets:
+          - localhost
+        labels:
+          job: app-data
+          service: pandora-agent
+          environment: production
+          __path__: /app/data/*.log
+    pipeline_stages:
+      - json:
+          expressions:
+            level: level
+            message: message
+            timestamp: timestamp
+      - labels:
+          level:
+      - timestamp:
+          source: timestamp
+          format: RFC3339
+      - output:
+          source: message
+

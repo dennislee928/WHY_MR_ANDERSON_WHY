@@ -1,0 +1,88 @@
+# AlertManager 設定檔
+global:
+  smtp_smarthost: 'localhost:587'
+  smtp_from: 'pandora-alerts@example.com'
+
+# 告警路由設定
+route:
+  group_by: ['alertname', 'cluster', 'service']
+  group_wait: 10s
+  group_interval: 10s
+  repeat_interval: 1h
+  receiver: 'default-receiver'
+  routes:
+    # 高優先級告警
+    - match:
+        severity: critical
+      receiver: 'critical-alerts'
+      group_wait: 5s
+      repeat_interval: 30m
+    
+    # 安全告警
+    - match:
+        category: security
+      receiver: 'security-alerts'
+      group_wait: 5s
+      repeat_interval: 15m
+    
+    # 網路告警
+    - match:
+        category: network
+      receiver: 'network-alerts'
+      group_wait: 10s
+      repeat_interval: 1h
+    
+    # 系統告警
+    - match:
+        category: system
+      receiver: 'system-alerts'
+      group_wait: 15s
+      repeat_interval: 2h
+
+# 告警接收器設定
+receivers:
+  # 預設接收器
+  - name: 'default-receiver'
+    webhook_configs:
+      - url: 'http://axiom-be:3001/api/v1/alerts/webhook'
+        send_resolved: true
+
+  # 關鍵告警接收器
+  - name: 'critical-alerts'
+    webhook_configs:
+      - url: 'http://axiom-be:3001/api/v1/alerts/critical'
+        send_resolved: true
+
+  # 安全告警接收器
+  - name: 'security-alerts'
+    webhook_configs:
+      - url: 'http://axiom-be:3001/api/v1/alerts/security'
+        send_resolved: true
+
+  # 網路告警接收器
+  - name: 'network-alerts'
+    webhook_configs:
+      - url: 'http://axiom-be:3001/api/v1/alerts/network'
+        send_resolved: true
+
+  # 系統告警接收器
+  - name: 'system-alerts'
+    webhook_configs:
+      - url: 'http://axiom-be:3001/api/v1/alerts/system'
+        send_resolved: true
+
+# 抑制規則
+inhibit_rules:
+  # 如果有關鍵告警，抑制同一實例的警告告警
+  - source_match:
+      severity: 'critical'
+    target_match:
+      severity: 'warning'
+    equal: ['alertname', 'instance']
+
+  # 如果裝置離線，抑制該裝置的其他告警
+  - source_match:
+      alertname: 'DeviceDown'
+    target_match_re:
+      alertname: '.*'
+    equal: ['instance']
