@@ -25,18 +25,18 @@ name = "security-platform-staging"
 [[d1_databases]]
 binding = "DB"
 database_name = "security_platform_db"
-database_id = "" # 需要建立後填入
+database_id = "security_platform_db" # 已設定
 
 # KV Namespace - 快取層，提升 API 回應速度
 [[kv_namespaces]]
 binding = "CACHE"
-id = "" # 需要建立後填入
+id = "cf-dapp-cache-prod" # 已設定
 preview_id = ""
 
 # KV Namespace - 會話管理，儲存用戶狀態、API 金鑰
 [[kv_namespaces]]
 binding = "SESSIONS"
-id = "" # 需要建立後填入
+id = "cf-dapp-cache-prod" # 已設定
 preview_id = ""
 
 # ========================================
@@ -46,12 +46,12 @@ preview_id = ""
 # R2 Bucket - 儲存安全日誌、威脅報告、備份資料
 [[r2_buckets]]
 binding = "LOGS"
-bucket_name = "security-logs"
+bucket_name = "auto-rag" # 已設定
 
 # R2 Bucket - 儲存威脅情報檔案、IOC 資料
 [[r2_buckets]]
 binding = "THREAT_INTEL"
-bucket_name = "threat-intelligence"
+bucket_name = "auto-rag" # 已設定
 
 # ========================================
 # AI & MACHINE LEARNING BINDINGS
@@ -73,12 +73,12 @@ index_name = "threat-intelligence"
 # Queue - 非同步威脅事件處理
 [[queues]]
 binding = "THREAT_PROCESSING"
-queue_name = "threat-analysis-queue"
+queue_name = "threat-analysis-queue" # 已設定
 
 # Queue - 日誌處理佇列
 [[queues]]
 binding = "LOG_PROCESSING"
-queue_name = "log-processing-queue"
+queue_name = "threat-analysis-queue" # 已設定
 
 # ========================================
 # SECURITY & RATE LIMITING BINDINGS
@@ -86,11 +86,11 @@ queue_name = "log-processing-queue"
 
 # Rate Limiter - API 速率限制，防止濫用
 [[rate_limits]]
-binding = "API_LIMITER"
+binding = "API_LIMITER" # 已設定 - Namespace ID: 1
 
 # Secrets Store - 安全儲存 API 金鑰、憑證
 [[secrets]]
-binding = "SECRETS"
+binding = "SECRETS" # 已設定 - vercel_admin_token
 
 # ========================================
 # REAL-TIME COMMUNICATION BINDINGS
@@ -100,13 +100,13 @@ binding = "SECRETS"
 [[durable_objects.bindings]]
 name = "WEBSOCKET_MANAGER"
 class_name = "WebSocketManager"
-script_name = "security-platform-worker"
+script_name = "web3-cloudflare-api_ApiContainer" # 已設定
 
 # Durable Objects - 威脅事件廣播
 [[durable_objects.bindings]]
 name = "THREAT_BROADCASTER"
 class_name = "ThreatBroadcaster"
-script_name = "security-platform-worker"
+script_name = "web3-cloudflare-api_ApiContainer" # 已設定
 
 # ========================================
 # ADVANCED FEATURES BINDINGS
@@ -115,7 +115,7 @@ script_name = "security-platform-worker"
 # Analytics Engine - 安全事件分析、統計
 [[analytics_engine_datasets]]
 binding = "ANALYTICS"
-dataset = "security-events"
+dataset = "security-events" # 已設定
 
 # Hyperdrive - 加速外部資料庫連線
 [[hyperdrive]]

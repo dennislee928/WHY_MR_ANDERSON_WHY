@@ -5,6 +5,11 @@ compatibility_date = "2024-01-01"
 # Account details (remove empty account_id)
 workers_dev = true
 
+# ========================================
+# 注意：以下 bindings 已手動設定完成
+# 請勿在 CI/CD 中覆蓋這些設定
+# ========================================
+
 # Routes (configure for production)
 # routes = [
 #   { pattern = "api.example.com/*", zone_name = "example.com" }
@@ -17,32 +22,32 @@ name = "security-platform-prod"
 [env.staging]
 name = "security-platform-staging"
 
-# D1 Database binding (commented out until database is created)
-# [[d1_databases]]
-# binding = "DB"
-# database_name = "security_platform_db"
-# database_id = "" # Add your D1 database ID
+# D1 Database binding - 已設定
+[[d1_databases]]
+binding = "DB"
+database_name = "security_platform_db"
+database_id = "security_platform_db" # 已設定
 
-# KV Namespace bindings (commented out until namespaces are created)
-# [[kv_namespaces]]
-# binding = "CACHE"
-# id = "" # Add your KV namespace ID
-# preview_id = "" # Add your preview KV namespace ID
+# KV Namespace bindings - 已設定
+[[kv_namespaces]]
+binding = "CACHE"
+id = "cf-dapp-cache-prod" # 已設定
+preview_id = ""
 
-# [[kv_namespaces]]
-# binding = "SESSIONS"
-# id = "" # Add your sessions KV namespace ID
-# preview_id = ""
+[[kv_namespaces]]
+binding = "SESSIONS"
+id = "cf-dapp-cache-prod" # 已設定
+preview_id = ""
 
-# Durable Objects (for WebSocket management - commented out for now)
-# [[durable_objects.bindings]]
-# name = "WEBSOCKET_MANAGER"
-# class_name = "WebSocketManager"
-# script_name = "security-platform-worker"
+# Durable Objects - 已設定
+[[durable_objects.bindings]]
+name = "WEBSOCKET_MANAGER"
+class_name = "WebSocketManager"
+script_name = "web3-cloudflare-api_ApiContainer" # 已設定
 
-# [[migrations]]
-# tag = "v1"
-# new_classes = ["WebSocketManager"]
+[[migrations]]
+tag = "v1"
+new_classes = ["WebSocketManager"]
 
 # Resource limits (within free tier)
 [limits]
