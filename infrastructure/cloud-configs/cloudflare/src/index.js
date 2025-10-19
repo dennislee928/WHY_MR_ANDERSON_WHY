@@ -3,9 +3,8 @@
  * 
  * This worker handles:
  * - REST API endpoints
- * - WebSocket connections
- * - Rate limiting
- * - Caching
+ * - Basic rate limiting
+ * - CORS handling
  * 
  * Free Tier Limits:
  * - 10M requests/month
@@ -15,30 +14,97 @@
  */
 
 import { Router } from 'itty-router';
-import { handleWebSocket } from './websocket';
-import { handleApiRequest } from './api';
-import { RateLimiter } from './middleware/rateLimit';
-import { cacheMiddleware } from './middleware/cache';
 
 // Create router
 const router = Router();
 
-// Rate limiter (150 requests per minute per IP)
-const rateLimiter = new RateLimiter({
-  limit: 150,
-  window: 60 * 1000, // 1 minute
-});
+// Simple rate limiter using in-memory storage
+const rateLimitMap = new Map();
+
+function checkRateLimit(request) {
+  const ip = request.headers.get('CF-Connecting-IP') || 'unknown';
+  const now = Date.now();
+  const windowMs = 60 * 1000; // 1 minute
+  const maxRequests = 150;
+
+  if (!rateLimitMap.has(ip)) {
+    rateLimitMap.set(ip, { count: 1, resetTime: now + windowMs });
+    return { allowed: true };
+  }
+
+  const record = rateLimitMap.get(ip);
+  
+  if (now > record.resetTime) {
+    record.count = 1;
+    record.resetTime = now + windowMs;
+    return { allowed: true };
+  }
+
+  if (record.count >= maxRequests) {
+    return { 
+      allowed: false, 
+      retryAfter: Math.ceil((record.resetTime - now) / 1000) 
+    };
+  }
+
+  record.count++;
+  return { allowed: true };
+}
 
 // API Routes
 router
-  .get('/api/v1/status', cacheMiddleware(60), handleApiRequest)
-  .get('/api/v1/health', handleApiRequest)
-  .get('/api/v1/security/threats', handleApiRequest)
-  .post('/api/v1/security/threats/:id/block', handleApiRequest)
-  .get('/api/v1/network/stats', cacheMiddleware(30), handleApiRequest)
-  .delete('/api/v1/network/blocked-ips/:ip', handleApiRequest)
-  .get('/api/v1/devices', cacheMiddleware(60), handleApiRequest)
-  .post('/api/v1/ml/detect', handleApiRequest)
+  .get('/api/v1/status', async () => {
+    return new Response(JSON.stringify({
+      status: 'operational',
+      timestamp: new Date().toISOString(),
+      version: '1.0.0',
+      services: {
+        worker: 'healthy',
+        database: 'not_configured',
+        cache: 'not_configured'
+      }
+    }), {
+      headers: { 'Content-Type': 'application/json' }
+    });
+  })
+  .get('/api/v1/health', async () => {
+    return new Response(JSON.stringify({
+      healthy: true,
+      timestamp: new Date().toISOString(),
+      version: '1.0.0',
+      uptime: 'running'
+    }), {
+      headers: { 'Content-Type': 'application/json' }
+    });
+  })
+  .get('/api/v1/security/threats', async () => {
+    return new Response(JSON.stringify({
+      threats: [],
+      total: 0,
+      message: 'Database not configured yet'
+    }), {
+      headers: { 'Content-Type': 'application/json' }
+    });
+  })
+  .get('/api/v1/network/stats', async () => {
+    return new Response(JSON.stringify({
+      totalRequests: 0,
+      blockedRequests: 0,
+      activeConnections: 0,
+      message: 'Database not configured yet'
+    }), {
+      headers: { 'Content-Type': 'application/json' }
+    });
+  })
+  .get('/api/v1/devices', async () => {
+    return new Response(JSON.stringify({
+      devices: [],
+      total: 0,
+      message: 'Database not configured yet'
+    }), {
+      headers: { 'Content-Type': 'application/json' }
+    });
+  })
   .all('*', () => new Response('Not Found', { status: 404 }));
 
 /**
@@ -60,7 +126,7 @@ async function handleRequest(request, env, ctx) {
   }
 
   // Check rate limit
-  const rateLimitResult = await rateLimiter.check(request, env);
+  const rateLimitResult = checkRateLimit(request);
   if (!rateLimitResult.allowed) {
     return new Response(
       JSON.stringify({
@@ -76,11 +142,6 @@ async function handleRequest(request, env, ctx) {
         },
       }
     );
-  }
-
-  // Handle WebSocket upgrade
-  if (request.headers.get('Upgrade') === 'websocket') {
-    return handleWebSocket(request, env);
   }
 
   // Route API requests
@@ -113,70 +174,6 @@ async function handleRequest(request, env, ctx) {
         },
       }
     );
-  }
-}
-
-/**
- * Durable Object for WebSocket management
- */
-export class WebSocketManager {
-  constructor(state, env) {
-    this.state = state;
-    this.env = env;
-    this.sessions = new Map();
-  }
-
-  async fetch(request) {
-    const webSocketPair = new WebSocketPair();
-    const [client, server] = Object.values(webSocketPair);
-
-    this.handleSession(server);
-
-    return new Response(null, {
-      status: 101,
-      webSocket: client,
-    });
-  }
-
-  handleSession(websocket) {
-    websocket.accept();
-    
-    const sessionId = crypto.randomUUID();
-    this.sessions.set(sessionId, websocket);
-
-    websocket.addEventListener('message', async (event) => {
-      try {
-        const data = JSON.parse(event.data);
-        await this.handleMessage(sessionId, data);
-      } catch (error) {
-        console.error('WebSocket message error:', error);
-      }
-    });
-
-    websocket.addEventListener('close', () => {
-      this.sessions.delete(sessionId);
-    });
-  }
-
-  async handleMessage(sessionId, data) {
-    const websocket = this.sessions.get(sessionId);
-    
-    if (data.type === 'ping') {
-      websocket.send(JSON.stringify({ type: 'pong', timestamp: Date.now() }));
-    } else if (data.type === 'subscribe') {
-      // Handle subscription
-      websocket.send(JSON.stringify({
-        type: 'subscribed',
-        channels: data.channels || [],
-      }));
-    }
-  }
-
-  broadcast(message) {
-    const payload = JSON.stringify(message);
-    this.sessions.forEach((ws) => {
-      ws.send(payload);
-    });
   }
 }
 
