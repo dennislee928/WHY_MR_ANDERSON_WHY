@@ -1,9 +1,8 @@
 name = "security-platform-worker"
-main = "src/index.js"
+main = "dist/index.js"
 compatibility_date = "2024-01-01"
 
-# Account details
-account_id = "" # Add your Cloudflare account ID
+# Account details (remove empty account_id)
 workers_dev = true
 
 # Routes (configure for production)
@@ -18,32 +17,32 @@ name = "security-platform-prod"
 [env.staging]
 name = "security-platform-staging"
 
-# D1 Database binding
-[[d1_databases]]
-binding = "DB"
-database_name = "security_platform_db"
-database_id = "" # Add your D1 database ID
+# D1 Database binding (commented out until database is created)
+# [[d1_databases]]
+# binding = "DB"
+# database_name = "security_platform_db"
+# database_id = "" # Add your D1 database ID
 
-# KV Namespace bindings
-[[kv_namespaces]]
-binding = "CACHE"
-id = "" # Add your KV namespace ID
-preview_id = "" # Add your preview KV namespace ID
+# KV Namespace bindings (commented out until namespaces are created)
+# [[kv_namespaces]]
+# binding = "CACHE"
+# id = "" # Add your KV namespace ID
+# preview_id = "" # Add your preview KV namespace ID
 
-[[kv_namespaces]]
-binding = "SESSIONS"
-id = "" # Add your sessions KV namespace ID
-preview_id = ""
+# [[kv_namespaces]]
+# binding = "SESSIONS"
+# id = "" # Add your sessions KV namespace ID
+# preview_id = ""
 
-# Durable Objects (for WebSocket management)
-[[durable_objects.bindings]]
-name = "WEBSOCKET_MANAGER"
-class_name = "WebSocketManager"
-script_name = "security-platform-worker"
+# Durable Objects (for WebSocket management - commented out for now)
+# [[durable_objects.bindings]]
+# name = "WEBSOCKET_MANAGER"
+# class_name = "WebSocketManager"
+# script_name = "security-platform-worker"
 
-[[migrations]]
-tag = "v1"
-new_classes = ["WebSocketManager"]
+# [[migrations]]
+# tag = "v1"
+# new_classes = ["WebSocketManager"]
 
 # Resource limits (within free tier)
 [limits]
@@ -56,9 +55,4 @@ enabled = true
 # Build configuration
 [build]
 command = "npm run build"
-watch_dirs = ["src"]
-
-[build.upload]
-format = "modules"
-main = "./dist/index.js"
 
