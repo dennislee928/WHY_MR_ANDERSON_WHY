@@ -5,6 +5,11 @@ compatibility_date = "2024-01-01"
 # Account details (remove empty account_id)
 workers_dev = true
 
+# ========================================
+# 注意：以下 bindings 已手動設定完成
+# 請勿在 CI/CD 中覆蓋這些設定
+# ========================================
+
 # Routes (configure for production)
 # routes = [
 #   { pattern = "api.example.com/*", zone_name = "example.com" }
