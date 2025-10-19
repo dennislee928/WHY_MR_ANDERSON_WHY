@@ -180,7 +180,7 @@ pipeline:
         identifier: deploy_cloudflare
         type: Deployment
         spec:
-          deploymentType: Custom
+          deploymentType: CustomDeployment
           service:
             serviceRef: cloudflare_workers
             serviceInputs:

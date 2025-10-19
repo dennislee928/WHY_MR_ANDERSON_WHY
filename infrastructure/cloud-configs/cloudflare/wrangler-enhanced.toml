@@ -1,0 +1,184 @@
+name = "security-platform-worker"
+main = "dist/index.js"
+compatibility_date = "2024-01-01"
+
+# Account details
+workers_dev = true
+
+# Routes (configure for production)
+# routes = [
+#   { pattern = "api.example.com/*", zone_name = "example.com" }
+# ]
+
+# Environment Variables
+[env.production]
+name = "security-platform-prod"
+
+[env.staging]
+name = "security-platform-staging"
+
+# ========================================
+# CORE DATA STORAGE BINDINGS
+# ========================================
+
+# D1 Database - 主要資料庫，儲存安全事件、威脅情報、設備資訊
+[[d1_databases]]
+binding = "DB"
+database_name = "security_platform_db"
+database_id = "security_platform_db" # 已設定
+
+# KV Namespace - 快取層，提升 API 回應速度
+[[kv_namespaces]]
+binding = "CACHE"
+id = "cf-dapp-cache-prod" # 已設定
+preview_id = ""
+
+# KV Namespace - 會話管理，儲存用戶狀態、API 金鑰
+[[kv_namespaces]]
+binding = "SESSIONS"
+id = "cf-dapp-cache-prod" # 已設定
+preview_id = ""
+
+# ========================================
+# FILE STORAGE & LOGGING BINDINGS
+# ========================================
+
+# R2 Bucket - 儲存安全日誌、威脅報告、備份資料
+[[r2_buckets]]
+binding = "LOGS"
+bucket_name = "auto-rag" # 已設定
+
+# R2 Bucket - 儲存威脅情報檔案、IOC 資料
+[[r2_buckets]]
+binding = "THREAT_INTEL"
+bucket_name = "auto-rag" # 已設定
+
+# ========================================
+# AI & MACHINE LEARNING BINDINGS
+# ========================================
+
+# Workers AI - AI 威脅檢測、異常行為分析
+[[ai]]
+binding = "AI"
+
+# Vectorize Index - 威脅情報向量搜尋、相似性比對
+[[vectorize]]
+binding = "THREAT_VECTORS"
+index_name = "threat-intelligence"
+
+# ========================================
+# MESSAGING & QUEUE BINDINGS
+# ========================================
+
+# Queue - 非同步威脅事件處理
+[[queues]]
+binding = "THREAT_PROCESSING"
+queue_name = "threat-analysis-queue" # 已設定
+
+# Queue - 日誌處理佇列
+[[queues]]
+binding = "LOG_PROCESSING"
+queue_name = "threat-analysis-queue" # 已設定
+
+# ========================================
+# SECURITY & RATE LIMITING BINDINGS
+# ========================================
+
+# Rate Limiter - API 速率限制，防止濫用
+[[rate_limits]]
+binding = "API_LIMITER" # 已設定 - Namespace ID: 1
+
+# Secrets Store - 安全儲存 API 金鑰、憑證
+[[secrets]]
+binding = "SECRETS" # 已設定 - vercel_admin_token
+
+# ========================================
+# REAL-TIME COMMUNICATION BINDINGS
+# ========================================
+
+# Durable Objects - WebSocket 管理，即時威脅通知
+[[durable_objects.bindings]]
+name = "WEBSOCKET_MANAGER"
+class_name = "WebSocketManager"
+script_name = "web3-cloudflare-api_ApiContainer" # 已設定
+
+# Durable Objects - 威脅事件廣播
+[[durable_objects.bindings]]
+name = "THREAT_BROADCASTER"
+class_name = "ThreatBroadcaster"
+script_name = "web3-cloudflare-api_ApiContainer" # 已設定
+
+# ========================================
+# ADVANCED FEATURES BINDINGS
+# ========================================
+
+# Analytics Engine - 安全事件分析、統計
+[[analytics_engine_datasets]]
+binding = "ANALYTICS"
+dataset = "security-events" # 已設定
+
+# Hyperdrive - 加速外部資料庫連線
+[[hyperdrive]]
+binding = "HYPERDRIVE"
+hyperdrive_id = "" # 需要建立後填入
+
+# ========================================
+# MIGRATIONS & VERSIONING
+# ========================================
+
+[[migrations]]
+tag = "v1"
+new_classes = ["WebSocketManager", "ThreatBroadcaster"]
+
+# ========================================
+# RESOURCE LIMITS & CONFIGURATION
+# ========================================
+
+# Resource limits (within free tier)
+[limits]
+cpu_ms = 30000 # 30 seconds max per request
+
+# Analytics
+[observability]
+enabled = true
+
+# Build configuration
+[build]
+command = "npm run build"
+
+# ========================================
+# USAGE EXAMPLES & DOCUMENTATION
+# ========================================
+
+# 使用範例：
+# 
+# 1. D1 Database:
+#    const result = await env.DB.prepare("SELECT * FROM threats").all();
+#
+# 2. KV Cache:
+#    await env.CACHE.put("threat:123", JSON.stringify(threatData));
+#    const cached = await env.CACHE.get("threat:123");
+#
+# 3. R2 Storage:
+#    await env.LOGS.put("logs/2024/01/15.log", logData);
+#
+# 4. Workers AI:
+#    const response = await env.AI.run("@cf/meta/llama-2-7b-chat-int8", {
+#      prompt: "Analyze this security event: " + eventData
+#    });
+#
+# 5. Vectorize:
+#    const matches = await env.THREAT_VECTORS.query(vector, { topK: 10 });
+#
+# 6. Queue:
+#    await env.THREAT_PROCESSING.send({ threatId: "123", severity: "high" });
+#
+# 7. Rate Limiter:
+#    const { success } = await env.API_LIMITER.limit({ key: clientIP });
+#
+# 8. Secrets:
+#    const apiKey = await env.SECRETS.get("EXTERNAL_API_KEY");
+#
+# 9. Durable Objects:
+#    const id = env.WEBSOCKET_MANAGER.idFromName("global");
+#    const obj = env.WEBSOCKET_MANAGER.get(id);
