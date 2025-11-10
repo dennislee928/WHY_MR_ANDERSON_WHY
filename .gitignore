@@ -292,3 +292,5 @@ src/ai-quantum/qasm_output/*.qasm
 # Keep example files
 !.env.example
 !*.example.*
+# Snyk Security Extension - AI Rules (auto-generated)
+.cursor\rules\snyk_rules.mdc
