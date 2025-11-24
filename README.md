@@ -1,4 +1,141 @@
-# Unified Security & Infrastructure Platform
+# Serverless E2E Tester (Robot Framework)
+
+一個開箱即用的 GitHub Action，用於在 CI 環境中執行 Robot Framework API 測試，無需手動安裝 Python、Java 或任何依賴套件。
+
+[![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
+[![GitHub Marketplace](https://img.shields.io/badge/Marketplace-Serverless%20E2E%20Tester-blue.svg)](https://github.com/marketplace/actions/serverless-e2e-tester-robot-framework)
+
+## 🎯 核心價值
+
+**解決 Serverless 測試環境建置的痛苦** - Robot Framework 很好用，但在 CI 環境安裝 Java/Python/Dependencies 很煩。這個 Action 讓您專注於撰寫測試，而不是配置環境。
+
+## ✨ 功能特色
+
+- ✅ **開箱即用** - 內建 Robot Framework + Requests Library + JSON Library
+- ✅ **環境注入** - 自動將 GitHub Secrets 注入為測試變數
+- ✅ **報告輸出** - 自動生成 HTML 測試報告
+- ✅ **標籤過濾** - 支援 `--include` 和 `--exclude` 標籤
+- ✅ **變數檔案** - 支援自訂變數檔案
+- ✅ **並行執行** - 支援多進程並行測試
+- ✅ **零配置** - 不需要安裝任何依賴
+
+## 📋 使用範例
+
+### 基本使用
+
+```yaml
+name: API E2E Tests
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Run Robot Framework Tests
+        uses: dennislee928/WHY_MR_ANDERSON_WHY@v0.0.1
+        with:
+          test_dir: 'QAQC'
+          target_url: 'https://your-api.workers.dev'
+      
+      - name: Upload Test Reports
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: robot-framework-reports
+          path: reports/
+          retention-days: 7
+```
+
+### 使用 GitHub Secrets
+
+```yaml
+- name: Run Robot Framework Tests
+  uses: dennislee928/WHY_MR_ANDERSON_WHY@v0.0.1
+  env:
+    API_KEY: ${{ secrets.API_KEY }}
+    AUTH_TOKEN: ${{ secrets.AUTH_TOKEN }}
+  with:
+    test_dir: 'QAQC'
+    target_url: 'https://your-api.workers.dev'
+```
+
+在 Robot Framework 測試中，這些 secrets 會自動注入為變數：
+
+```robot
+*** Test Cases ***
+Test API with Authentication
+    ${headers}=    Create Dictionary
+    ...    Authorization=Bearer ${AUTH_TOKEN}
+    ...    X-API-Key=${API_KEY}
+    ${response}=    GET    ${BASE_URL}/api/v1/endpoint    headers=${headers}
+    Should Be Equal As Strings    ${response.status_code}    200
+```
+
+### 使用標籤過濾
+
+```yaml
+- name: Run Smoke Tests Only
+  uses: dennislee928/WHY_MR_ANDERSON_WHY@v0.0.1
+  with:
+    test_dir: 'QAQC'
+    target_url: 'https://your-api.workers.dev'
+    include_tags: 'smoke'
+    exclude_tags: 'slow,integration'
+```
+
+### 並行執行
+
+```yaml
+- name: Run Tests in Parallel
+  uses: dennislee928/WHY_MR_ANDERSON_WHY@v0.0.1
+  with:
+    test_dir: 'QAQC'
+    target_url: 'https://your-api.workers.dev'
+    processes: '4'
+```
+
+## 📖 Inputs 說明
+
+| Input | 說明 | 必填 | 預設值 |
+|-------|------|------|--------|
+| `test_dir` | 包含 `.robot` 測試檔案的目錄 | ✅ | - |
+| `target_url` | 部署的 API 基礎 URL（例如 Cloudflare Worker URL） | ✅ | - |
+| `report_dir` | 測試報告儲存目錄 | ❌ | `reports` |
+| `include_tags` | 要包含的測試標籤（逗號分隔，例如：`smoke,regression`） | ❌ | - |
+| `exclude_tags` | 要排除的測試標籤（逗號分隔） | ❌ | - |
+| `variable_file` | Robot Framework 變數檔案路徑（多個檔案用逗號分隔） | ❌ | - |
+| `processes` | 並行執行進程數（預設 1 為順序執行） | ❌ | `1` |
+| `timeout` | 測試超時時間（Robot Framework 格式，例如：`5 minutes`） | ❌ | - |
+| `log_level` | 日誌級別（TRACE, DEBUG, INFO, WARN, ERROR, NONE） | ❌ | `INFO` |
+| `artifact_name` | 上傳的 artifact 名稱 | ❌ | `robot-framework-reports` |
+| `artifact_retention_days` | Artifact 保留天數 | ❌ | `7` |
+
+## 📤 Outputs 說明
+
+| Output | 說明 |
+|--------|------|
+| `exit_code` | Robot Framework 執行退出碼（0 = 成功，非零 = 失敗） |
+| `report_path` | 生成的測試報告目錄路徑 |
+
+## 🎯 適用場景
+
+- **Cloudflare Workers** 部署驗證
+- **AWS Lambda / Vercel** Serverless API 測試
+- **CI/CD Pipeline** 中的 Smoke Tests
+
+---
+---
+
+# Unified Security & Infrastructure Platform (Project Context)
+
+> 以下為本專案完整平台的說明文件，包含此 Action 的來源專案背景。
 
 [![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 [![Go Version](https://img.shields.io/badge/Go-1.24+-blue.svg)](https://golang.org)
@@ -48,345 +185,38 @@ A comprehensive, cloud-native security and infrastructure management platform co
 - Docker Compose 2.0+
 - Go 1.24+ (for local development)
 - Python 3.11+ (for AI/Quantum features)
-- Node.js 18+ (for frontend development)
 
-### 1. Clone Repository
-
-```bash
-git clone <repository-url>
-cd WHY_MR_ANDERSON_WHY
-```
-
-### 2. Environment Setup
-
-```bash
-cp .env.example .env
-# Edit .env with your configurations
-```
-
-### 3. Start with Docker Compose
-
-```bash
-cd infrastructure/docker
-docker-compose up -d
-```
-
-### 4. Access Services
-
-- **Frontend UI**: http://localhost:3001
-- **Backend API**: http://localhost:3001/api/v1
-- **Swagger Docs**: http://localhost:3001/swagger
-- **AI/Quantum API**: http://localhost:8000
-- **Grafana**: http://localhost:3000
-- **Prometheus**: http://localhost:9090
-
-## Features
-
-### 🛡️ Security Features
-
-- **Real-time IDS/IPS**: USB-SERIAL CH340 based intrusion detection
-- **AI Threat Detection**: 95.8% accuracy, 10 threat types
-- **Quantum Cryptography**: QKD, post-quantum encryption
-- **Zero Trust Architecture**: Context-aware access control
-- **Vulnerability Scanning**: Nuclei, Nmap, AMASS integration
-
-### 🤖 AI/ML Capabilities
-
-- Deep learning threat classification
-- Behavioral anomaly detection
-- Quantum-enhanced machine learning
-- AI governance and fairness auditing
-- Real-time data flow monitoring
-
-### 🔬 Quantum Computing
-
-- IBM Quantum integration (127+ qubits)
-- Quantum Key Distribution (QKD)
-- Post-quantum cryptography
-- Quantum threat prediction
-- Hybrid quantum-classical ML
-
-### 🌐 Multi-Cloud Support
-
-| Platform | Free Tier | Features |
-|----------|-----------|----------|
-| **Cloudflare Workers** | 10M req/month | Serverless, D1 Database, KV Storage |
-| **Oracle Cloud (OCI)** | Always Free | 2 VMs, 4 ARM cores, 200GB storage |
-| **IBM Cloud** | Lite Plan | Cloud Foundry, Object Storage |
-
-See [Cost Comparison](docs/deployment/cost-comparison.md) for details.
-
-### 📊 Monitoring & Observability
-
-- Prometheus metrics collection
-- Grafana dashboards
-- Loki log aggregation
-- Distributed tracing
-- Real-time WebSocket updates
-
-## Project Structure
-
-```
-WHY_MR_ANDERSON_WHY/
-├── src/                          # Source code
-│   ├── backend/                  # Go services
-│   │   ├── cmd/                  # Entry points
-│   │   ├── core/                 # Core logic (internal)
-│   │   ├── axiom-api/            # REST API server
-│   │   ├── api/                  # gRPC definitions
-│   │   └── database/             # Migrations
-│   ├── frontend/                 # React UI (Next.js)
-│   ├── ai-quantum/               # Python AI/Quantum services
-│   └── security-tools/           # Scanner integrations
-├── infrastructure/               # Deployment configs
-│   ├── docker/                   # Docker & Compose
-│   ├── kubernetes/               # K8s manifests
-│   ├── terraform/                # Infrastructure as Code
-│   └── cloud-configs/            # Cloud-specific configs
-│       ├── cloudflare/
-│       ├── oci/
-│       └── ibm/
-├── cicd/                         # CI/CD pipelines
-│   ├── buddy/                    # Buddy CI
-│   ├── argocd/                   # Argo CD GitOps
-│   └── harness/                  # Harness pipelines
-├── docs/                         # Documentation
-├── scripts/                      # Utility scripts
-├── configs/                      # Application configs
-└── tests/                        # Test suites
-```
-
-## Deployment
-
-### Local Development
-
-```bash
-# Backend
-cd src/backend
-go run cmd/server/main.go
-
-# Frontend
-cd src/frontend
-npm install
-npm run dev
-
-# AI/Quantum
-cd src/ai-quantum
-pip install -r requirements.txt
-python main.py
-```
-
-### Docker Deployment
-
-```bash
-cd infrastructure/docker
-docker-compose up -d
-```
-
-### Kubernetes Deployment
-
-```bash
-kubectl apply -f infrastructure/kubernetes/
-```
-
-### Cloud Deployments
-
-- **Cloudflare Workers**: See [Cloudflare Guide](docs/deployment/cloudflare.md)
-- **Oracle Cloud**: See [OCI Guide](docs/deployment/oci.md)
-- **IBM Cloud**: See [IBM Cloud Guide](docs/deployment/ibm-cloud.md)
-
-## CI/CD
-
-Three CI/CD platforms are supported:
-
-1. **Buddy CI** - Simple, Docker-focused
-   - Config: `cicd/buddy/buddy.yml`
-   
-2. **Argo CD** - GitOps, Kubernetes-native
-   - Config: `cicd/argocd/`
-   
-3. **Harness** - Enterprise-grade
-   - Config: `cicd/harness/`
-
-See [CI/CD Documentation](docs/deployment/cicd.md) for setup instructions.
-
-## API Documentation
-
-### REST API
-
-Full API documentation available at:
-- Local: http://localhost:3001/swagger
-- Production: See deployment docs
-
-Key endpoints:
-
-```bash
-# System Status
-GET /api/v1/status
-
-# Security Threats
-GET /api/v1/security/threats
-POST /api/v1/security/threats/:id/block
-
-# Network Management
-GET /api/v1/network/stats
-DELETE /api/v1/network/blocked-ips/:ip
-
-# AI/ML Threat Detection
-POST /api/v1/ml/detect
-
-# Quantum Services
-POST /api/v1/quantum/qkd/generate
-POST /api/v1/zerotrust/predict
-```
-
-### WebSocket
-
-Real-time updates via WebSocket:
-
-```javascript
-const ws = new WebSocket('ws://localhost:3001/ws?client_id=dashboard');
-ws.onmessage = (event) => {
-    const data = JSON.parse(event.data);
-    // Handle real-time updates
-};
-```
-
-## Configuration
-
-### Environment Variables
-
-Key configuration in `.env`:
-
-```bash
-# Database
-DB_HOST=localhost
-DB_PORT=5432
-DB_USER=sectools
-DB_PASSWORD=changeme
-
-# Redis
-REDIS_HOST=localhost
-REDIS_PORT=6379
-
-# IBM Quantum
-IBM_QUANTUM_TOKEN=your_token_here
-
-# Cloud Providers
-CLOUDFLARE_API_TOKEN=
-OCI_TENANCY_OCID=
-IBM_CLOUD_API_KEY=
-```
-
-### Application Configs
-
-- **Backend**: `configs/agent-config.yaml`
-- **Frontend**: `src/frontend/.env.local`
-- **AI/Quantum**: `src/ai-quantum/env.example`
-
-## Security
-
-### Best Practices
-
-- ✅ All sensitive data encrypted at rest
-- ✅ mTLS for service-to-service communication
-- ✅ Rate limiting and DDoS protection
-- ✅ SAST scanning in CI/CD
-- ✅ Regular dependency updates
-- ✅ Zero-trust architecture
-
-### Compliance
-
-- GDPR compliant
-- SOC2 ready
-- ISO27001 aligned
-- PII auto-detection and anonymization
-
-## Performance
-
-| Metric | Value |
-|--------|-------|
-| API Response Time (P99) | < 2ms |
-| Throughput | 500K+ req/s |
-| AI Detection Latency | < 10ms |
-| Availability | 99.999% |
-
-## Contributing
-
-We welcome contributions! Please see [CONTRIBUTING.md](CONTRIBUTING.md).
-
-### Development Workflow
-
-1. Fork the repository
-2. Create feature branch (`git checkout -b feature/amazing-feature`)
-3. Commit changes (`git commit -m 'Add amazing feature'`)
-4. Push to branch (`git push origin feature/amazing-feature`)
-5. Open Pull Request
-
-## Testing
-
-```bash
-# Backend tests
-cd src/backend
-go test ./...
-
-# Frontend tests
-cd src/frontend
-npm test
-
-# Integration tests
-cd tests
-go test -tags=integration ./...
-```
+### Installation
+
+1. **Clone the repository**
+   ```bash
+   git clone https://github.com/dennislee928/WHY_MR_ANDERSON_WHY.git
+   cd WHY_MR_ANDERSON_WHY
+   ```
+
+2. **Setup Environment**
+   ```bash
+   cp .env.example .env
+   # Edit .env with your configuration
+   ```
+
+3. **Start Services**
+   ```bash
+   docker-compose up -d
+   ```
 
 ## Documentation
 
-- [Architecture](docs/architecture/system-design.md)
+- [Architecture Details](docs/architecture/system-design.md)
 - [API Reference](docs/development/api-reference.md)
-- [Deployment Guides](docs/deployment/)
-- [Security](docs/security/)
-- [Development Guide](docs/development/getting-started.md)
-
-## Roadmap
-
-### Q1 2025
-- ✅ Unified project structure
-- ✅ Multi-cloud deployment
-- ✅ Three CI/CD platforms
-- [ ] Enhanced AI threat detection
-- [ ] Expanded quantum algorithms
-
-### Q2 2025
-- [ ] Mobile app support
-- [ ] Advanced analytics dashboard
-- [ ] Multi-tenant architecture
-- [ ] MISP threat intelligence integration
+- [Security Guide](docs/security/)
+- [Deployment Guide](docs/deployment/)
 
 ## License
 
-This project is licensed under the MIT License - see [LICENSE](LICENSE) file.
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
 
-## Acknowledgments
+## Contact
 
-- [ProjectDiscovery](https://github.com/projectdiscovery) - Nuclei scanner
-- [Nmap](https://nmap.org/) - Network scanning
-- [OWASP AMASS](https://github.com/OWASP/Amass) - Asset discovery
-- [IBM Quantum](https://quantum-computing.ibm.com/) - Quantum computing
-- [Qiskit](https://qiskit.org/) - Quantum development
-
-## Support
-
-- **Issues**: [GitHub Issues](https://github.com/your-repo/issues)
-- **Discussions**: [GitHub Discussions](https://github.com/your-repo/discussions)
-- **Email**: security@example.com
-
-## Disclaimer
-
-This tool is for authorized security testing and research only. Users must comply with local laws and obtain proper authorization before scanning any systems.
-
----
-
-**Made with ❤️ by the Security Community**
-
-**🌟 If this project helps you, please give it a star!**
-
+- **Author**: Dennislee928
+- **Project**: [GitHub Repository](https://github.com/dennislee928/WHY_MR_ANDERSON_WHY)
