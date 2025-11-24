@@ -56,7 +56,7 @@ outputs:
 
 runs:
   using: 'docker'
-  image: './actions/robot-framework-serverless-tester/Dockerfile'
+  image: 'Dockerfile'
   args:
     - ${{ inputs.test_dir }}
     - ${{ inputs.target_url }}
