@@ -1,4 +1,4 @@
-name: 'Serverless E2E Tester (Robot Framework)'
+name: 'Serverless E2E Tester (Robot Framework) by Dennis'
 description: 'Run Robot Framework tests against your API endpoints with zero setup. Perfect for Cloudflare Workers and serverless deployments.'
 
 author: 'Dennislee928'
