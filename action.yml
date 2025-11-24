@@ -1,0 +1,71 @@
+name: 'Serverless E2E Tester (Robot Framework)'
+description: 'Run Robot Framework tests against your API endpoints with zero setup. Perfect for Cloudflare Workers and serverless deployments.'
+
+author: 'Dennislee928'
+
+# Marketplace 的視覺設定
+branding:
+  icon: 'check-circle'  # 可選圖示: https://feathericons.com/
+  color: 'green'
+
+inputs:
+  test_dir:
+    description: 'Directory containing .robot test files'
+    required: true
+  target_url:
+    description: 'Base URL of the deployed API (e.g., Cloudflare Worker URL)'
+    required: true
+  report_dir:
+    description: 'Directory where test reports will be saved'
+    required: false
+    default: 'reports'
+  include_tags:
+    description: 'Comma-separated list of test tags to include (e.g., smoke,regression)'
+    required: false
+  exclude_tags:
+    description: 'Comma-separated list of test tags to exclude'
+    required: false
+  variable_file:
+    description: 'Path to Robot Framework variable file, or comma-separated paths for multiple files'
+    required: false
+  processes:
+    description: 'Number of parallel processes for test execution (default: 1, sequential)'
+    required: false
+    default: '1'
+  timeout:
+    description: 'Test timeout in Robot Framework format (e.g., "5 minutes", "30 seconds")'
+    required: false
+  log_level:
+    description: 'Log level (TRACE, DEBUG, INFO, WARN, ERROR, NONE)'
+    required: false
+    default: 'INFO'
+  artifact_name:
+    description: 'Name for the uploaded artifact containing test reports'
+    required: false
+    default: 'robot-framework-reports'
+  artifact_retention_days:
+    description: 'Number of days to retain the artifact'
+    required: false
+    default: '7'
+
+outputs:
+  exit_code:
+    description: 'Exit code from Robot Framework execution (0 = success, non-zero = failure)'
+  report_path:
+    description: 'Path to the generated test report directory'
+
+runs:
+  using: 'docker'
+  image: './actions/robot-framework-serverless-tester/Dockerfile'
+  args:
+    - ${{ inputs.test_dir }}
+    - ${{ inputs.target_url }}
+    - ${{ inputs.report_dir }}
+    - ${{ inputs.include_tags }}
+    - ${{ inputs.exclude_tags }}
+    - ${{ inputs.variable_file }}
+    - ${{ inputs.processes }}
+    - ${{ inputs.timeout }}
+    - ${{ inputs.log_level }}
+
+
