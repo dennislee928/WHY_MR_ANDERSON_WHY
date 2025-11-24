@@ -101,10 +101,6 @@ log_info "Injected $SECRET_COUNT variables as Robot Framework variables"
 # 建構 robot 命令參數陣列（安全執行，避免命令注入）
 EXIT_CODE=0
 ROBOT_ARGS=()
-ROBOT_ARGS+=("--outputdir" "$REPORT_DIR")
-ROBOT_ARGS+=("--logdir" "$REPORT_DIR")
-ROBOT_ARGS+=("--reportdir" "$REPORT_DIR")
-ROBOT_ARGS+=("--loglevel" "$LOG_LEVEL")
 
 # 設定基本參數
 ROBOT_ARGS+=("--outputdir" "$REPORT_DIR")

@@ -1,8 +1,11 @@
 name: 'Serverless E2E Tester (Robot Framework)'
 description: 'Run Robot Framework tests against your API endpoints with zero setup. Perfect for Cloudflare Workers and serverless deployments.'
 
+author: 'Dennislee928'
+
+# Marketplace 的視覺設定
 branding:
-  icon: 'check-circle'
+  icon: 'check-circle'  # 可選圖示: https://feathericons.com/
   color: 'green'
 
 inputs:
