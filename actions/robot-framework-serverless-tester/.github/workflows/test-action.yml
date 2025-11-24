@@ -1,0 +1,66 @@
+name: Test Robot Framework Action
+
+on:
+  push:
+    branches: [ main, dev ]
+    paths:
+      - 'actions/robot-framework-serverless-tester/**'
+      - 'QAQC/**'
+  pull_request:
+    branches: [ main, dev ]
+    paths:
+      - 'actions/robot-framework-serverless-tester/**'
+      - 'QAQC/**'
+  workflow_dispatch:
+
+jobs:
+  test-action:
+    name: Test Robot Framework Action
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Run Robot Framework Tests (Basic)
+        id: basic-test
+        uses: ./actions/robot-framework-serverless-tester
+        with:
+          test_dir: 'QAQC'
+          target_url: 'https://security-platform-worker.workers.dev'
+          report_dir: 'reports/basic'
+          log_level: 'INFO'
+      
+      - name: Run Robot Framework Tests (With Tags)
+        id: tagged-test
+        uses: ./actions/robot-framework-serverless-tester
+        with:
+          test_dir: 'QAQC'
+          target_url: 'https://security-platform-worker.workers.dev'
+          report_dir: 'reports/tagged'
+          include_tags: 'smoke'
+          exclude_tags: 'slow'
+          log_level: 'INFO'
+        continue-on-error: true
+      
+      - name: Upload Basic Test Reports
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: robot-framework-reports-basic
+          path: reports/basic/
+          retention-days: 7
+      
+      - name: Upload Tagged Test Reports
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: robot-framework-reports-tagged
+          path: reports/tagged/
+          retention-days: 7
+      
+      - name: Check Test Results
+        if: steps.basic-test.outputs.exit_code != '0'
+        run: |
+          echo "Basic tests failed with exit code: ${{ steps.basic-test.outputs.exit_code }}"
+          exit 1
+
