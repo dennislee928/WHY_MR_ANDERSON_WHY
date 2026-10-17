@@ -1,27 +1,27 @@
 # Serverless E2E Tester (Robot Framework)
 
-一個開箱即用的 GitHub Action，用於在 CI 環境中執行 Robot Framework API 測試，無需手動安裝 Python、Java 或任何依賴套件。
+A ready-to-use GitHub Action for running Robot Framework API tests in CI, without manually installing Python, Java, or any dependencies.
 
 [![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 [![GitHub Marketplace](https://img.shields.io/badge/Marketplace-Serverless%20E2E%20Tester-blue.svg)](https://github.com/marketplace/actions/serverless-e2e-tester-robot-framework-by-dennis)
 
-## 🎯 核心價值
+## Core Value
 
-**解決 Serverless 測試環境建置的痛苦** - Robot Framework 很好用，但在 CI 環境安裝 Java/Python/Dependencies 很煩。這個 Action 讓您專注於撰寫測試，而不是配置環境。
+**Remove the pain of setting up a serverless test environment.** Robot Framework works well, but installing Java, Python, and dependencies in CI is tedious. This Action lets you focus on writing tests instead of configuring the environment.
 
-## ✨ 功能特色
+## Features
 
-- ✅ **開箱即用** - 內建 Robot Framework + Requests Library + JSON Library
-- ✅ **環境注入** - 自動將 GitHub Secrets 注入為測試變數
-- ✅ **報告輸出** - 自動生成 HTML 測試報告
-- ✅ **標籤過濾** - 支援 `--include` 和 `--exclude` 標籤
-- ✅ **變數檔案** - 支援自訂變數檔案
-- ✅ **並行執行** - 支援多進程並行測試
-- ✅ **零配置** - 不需要安裝任何依賴
+- **Ready to use** - Includes Robot Framework, Requests Library, and JSON Library
+- **Environment injection** - Automatically injects GitHub Secrets as test variables
+- **Report output** - Automatically generates HTML test reports
+- **Tag filtering** - Supports `--include` and `--exclude` tags
+- **Variable files** - Supports custom variable files
+- **Parallel execution** - Supports multi-process parallel tests
+- **Zero configuration** - No dependencies to install
 
-## 📋 使用範例
+## Usage Examples
 
-### 基本使用
+### Basic usage
 
 ```yaml
 name: API E2E Tests
@@ -53,7 +53,7 @@ jobs:
           retention-days: 7
 ```
 
-### 使用 GitHub Secrets
+### Using GitHub Secrets
 
 ```yaml
 - name: Run Robot Framework Tests
@@ -66,7 +66,7 @@ jobs:
     target_url: 'https://your-api.workers.dev'
 ```
 
-在 Robot Framework 測試中，這些 secrets 會自動注入為變數：
+These secrets are automatically injected as variables in Robot Framework tests:
 
 ```robot
 *** Test Cases ***
@@ -78,7 +78,7 @@ Test API with Authentication
     Should Be Equal As Strings    ${response.status_code}    200
 ```
 
-### 使用標籤過濾
+### Filtering by tags
 
 ```yaml
 - name: Run Smoke Tests Only
@@ -90,7 +90,7 @@ Test API with Authentication
     exclude_tags: 'slow,integration'
 ```
 
-### 並行執行
+### Parallel execution
 
 ```yaml
 - name: Run Tests in Parallel
@@ -101,48 +101,47 @@ Test API with Authentication
     processes: '4'
 ```
 
-## 📖 Inputs 說明
+## Inputs
 
-| Input | 說明 | 必填 | 預設值 |
-|-------|------|------|--------|
-| `test_dir` | 包含 `.robot` 測試檔案的目錄 | ✅ | - |
-| `target_url` | 部署的 API 基礎 URL（例如 Cloudflare Worker URL） | ✅ | - |
-| `report_dir` | 測試報告儲存目錄 | ❌ | `reports` |
-| `include_tags` | 要包含的測試標籤（逗號分隔，例如：`smoke,regression`） | ❌ | - |
-| `exclude_tags` | 要排除的測試標籤（逗號分隔） | ❌ | - |
-| `variable_file` | Robot Framework 變數檔案路徑（多個檔案用逗號分隔） | ❌ | - |
-| `processes` | 並行執行進程數（預設 1 為順序執行） | ❌ | `1` |
-| `timeout` | 測試超時時間（Robot Framework 格式，例如：`5 minutes`） | ❌ | - |
-| `log_level` | 日誌級別（TRACE, DEBUG, INFO, WARN, ERROR, NONE） | ❌ | `INFO` |
-| `artifact_name` | 上傳的 artifact 名稱 | ❌ | `robot-framework-reports` |
-| `artifact_retention_days` | Artifact 保留天數 | ❌ | `7` |
+| Input | Description | Required | Default |
+|-------|-------------|----------|---------|
+| `test_dir` | Directory containing `.robot` test files | Yes | - |
+| `target_url` | Deployed API base URL (for example, a Cloudflare Worker URL) | Yes | - |
+| `report_dir` | Directory where test reports are stored | No | `reports` |
+| `include_tags` | Test tags to include (comma-separated, for example: `smoke,regression`) | No | - |
+| `exclude_tags` | Test tags to exclude (comma-separated) | No | - |
+| `variable_file` | Path to a Robot Framework variable file (comma-separated for multiple files) | No | - |
+| `processes` | Number of parallel processes (`1` runs tests sequentially) | No | `1` |
+| `timeout` | Test timeout in Robot Framework format (for example: `5 minutes`) | No | - |
+| `log_level` | Log level (`TRACE`, `DEBUG`, `INFO`, `WARN`, `ERROR`, `NONE`) | No | `INFO` |
+| `artifact_name` | Name of the uploaded artifact | No | `robot-framework-reports` |
+| `artifact_retention_days` | Artifact retention in days | No | `7` |
 
-## 📤 Outputs 說明
+## Outputs
 
-| Output | 說明 |
-|--------|------|
-| `exit_code` | Robot Framework 執行退出碼（0 = 成功，非零 = 失敗） |
-| `report_path` | 生成的測試報告目錄路徑 |
+| Output | Description |
+|--------|-------------|
+| `exit_code` | Robot Framework exit code (`0` means success; non-zero means failure) |
+| `report_path` | Path to the generated test report directory |
 
-## 🎯 適用場景
+## Use Cases
 
-- **Cloudflare Workers** 部署驗證
-- **AWS Lambda / Vercel** Serverless API 測試
-- **CI/CD Pipeline** 中的 Smoke Tests
+- **Cloudflare Workers** deployment verification
+- **AWS Lambda / Vercel** serverless API testing
+- **CI/CD pipeline** smoke tests
 
----
 ---
 
 # Unified Security & Infrastructure Platform (Project Context)
 
-> 以下為本專案完整平台的說明文件，包含此 Action 的來源專案背景。
+> The sections below describe the full platform this Action comes from.
 
 [![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 [![Go Version](https://img.shields.io/badge/Go-1.24+-blue.svg)](https://golang.org)
 [![Python Version](https://img.shields.io/badge/Python-3.11+-blue.svg)](https://python.org)
 [![Docker](https://img.shields.io/badge/Docker-20.10+-blue.svg)](https://docker.com)
 
-[繁體中文](README.zh-TW.md) | English
+[Traditional Chinese](README.zh-TW.md) | English
 
 ## Overview
 
