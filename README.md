@@ -3,7 +3,7 @@
 一個開箱即用的 GitHub Action，用於在 CI 環境中執行 Robot Framework API 測試，無需手動安裝 Python、Java 或任何依賴套件。
 
 [![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
-[![GitHub Marketplace](https://img.shields.io/badge/Marketplace-Serverless%20E2E%20Tester-blue.svg)](https://github.com/marketplace/actions/serverless-e2e-tester-robot-framework)
+[![GitHub Marketplace](https://img.shields.io/badge/Marketplace-Serverless%20E2E%20Tester-blue.svg)](https://github.com/marketplace/actions/serverless-e2e-tester-robot-framework-by-dennis)
 
 ## 🎯 核心價值
 
@@ -39,7 +39,7 @@ jobs:
       - uses: actions/checkout@v4
       
       - name: Run Robot Framework Tests
-        uses: dennislee928/WHY_MR_ANDERSON_WHY@v0.0.1
+        uses: dennislee928/WHY_MR_ANDERSON_WHY@v0.0.2
         with:
           test_dir: 'QAQC'
           target_url: 'https://your-api.workers.dev'
@@ -57,7 +57,7 @@ jobs:
 
 ```yaml
 - name: Run Robot Framework Tests
-  uses: dennislee928/WHY_MR_ANDERSON_WHY@v0.0.1
+  uses: dennislee928/WHY_MR_ANDERSON_WHY@v0.0.2
   env:
     API_KEY: ${{ secrets.API_KEY }}
     AUTH_TOKEN: ${{ secrets.AUTH_TOKEN }}
@@ -82,7 +82,7 @@ Test API with Authentication
 
 ```yaml
 - name: Run Smoke Tests Only
-  uses: dennislee928/WHY_MR_ANDERSON_WHY@v0.0.1
+  uses: dennislee928/WHY_MR_ANDERSON_WHY@v0.0.2
   with:
     test_dir: 'QAQC'
     target_url: 'https://your-api.workers.dev'
@@ -94,7 +94,7 @@ Test API with Authentication
 
 ```yaml
 - name: Run Tests in Parallel
-  uses: dennislee928/WHY_MR_ANDERSON_WHY@v0.0.1
+  uses: dennislee928/WHY_MR_ANDERSON_WHY@v0.0.2
   with:
     test_dir: 'QAQC'
     target_url: 'https://your-api.workers.dev'
